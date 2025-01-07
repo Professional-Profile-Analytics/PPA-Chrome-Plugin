@@ -52,24 +52,36 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 
-// BASIC script
-function runAutomationScript() {
+
+// BASIC script with console.log
+async function runAutomationScript() {
   let email = null;
 
-  chrome.storage.sync.get(['email'], (result) => {
-    email = result.email;
-
-    if (!email) {
-      alert('Please set your email address in the options page first.');
-      return;
-    }
-
-    chrome.tabs.create({ url: "https://linkedin.com", active: false }, (tab) => {
-      const tabId = tab.id;
-      executeLinkedInSteps(tabId);
+  // Use Promise to get email from chrome storage synchronously
+  await new Promise((resolve, reject) => {
+    chrome.storage.local.get(['email'], (result) => {
+      email = result.email;
+      if (email) {
+        resolve(email);  // Successfully fetched email, resolve promise
+      } else {
+        reject('No email found. Please set your email address in the options page first.');
+      }
     });
+  }).catch((error) => {
+    console.log(error);  // Log error to console instead of alert
+    return; // Stop the function if email is not found
+  });
+
+  // If email is found, continue with the automation process
+  // console.log(email);  // Log the email for verification
+
+  // Open LinkedIn tab and proceed
+  chrome.tabs.create({ url: "https://linkedin.com", active: false }, (tab) => {
+    const tabId = tab.id;
+    executeLinkedInSteps(tabId);
   });
 }
+
 
 
 
@@ -148,13 +160,70 @@ function clickLink(tabId, linkText) {
 }
 
 
+function selectListOptionByForAttribute(tabId, forAttributeValue) {
+  return new Promise((resolve, reject) => {
+    chrome.scripting.executeScript(
+      {
+        target: { tabId: tabId },
+        func: (attributeValue) => {
+          // Find the label with the matching `for` attribute
+          const label = document.querySelector(`label[for="${attributeValue}"]`);
+          if (label) {
+            label.click(); // Click the label to select the associated radio button
+            return true;
+          } else {
+            throw new Error(`Label with for="${attributeValue}" not found.`);
+          }
+        },
+        args: [forAttributeValue],
+      },
+      (results) => {
+        if (chrome.runtime.lastError || !results[0]?.result) {
+          reject(new Error(`Failed to select option with for="${forAttributeValue}".`));
+        } else {
+          resolve(); // Successfully clicked the label
+        }
+      }
+    );
+  });
+}
+
+
+
+// Helper function to click a button
+function clickButton(tabId, buttonText) {
+  return new Promise((resolve, reject) => {
+    chrome.scripting.executeScript({
+      target: { tabId: tabId },
+      func: (text) => {
+        const button = Array.from(document.querySelectorAll('button')).find((btn) => btn.textContent.includes(text));
+        if (button) {
+          button.click();
+          return true;
+        } else {
+          throw new Error(`Button with text "${text}" not found.`);  // Corrected this line
+        }
+      },
+      args: [buttonText]
+    }, (results) => {
+      if (chrome.runtime.lastError || !results[0]?.result) {
+        reject(new Error(`Failed to click button: ${buttonText}`));  // Corrected this line
+      } else {
+        setTimeout(resolve, 1000); // Wait 1 second before continuing
+      }
+    });
+  });
+}
+
+
+
 
 // The main script execution flow
 const executeLinkedInSteps = async (tabId) => {
   try {
     // Get email from storage
     let email = null;
-    chrome.storage.sync.get(['email'], (result) => {
+    chrome.storage.local.get(['email'], (result) => {
       email = result.email;
 
       if (!email) {
@@ -190,6 +259,19 @@ const proceedWithLinkedInSteps = async (tabId, email) => {
 
     // Wait for the page to load again
     await waitForPageLoad(tabId);
+
+    // Step 1: Click "Past 7 days" button to open the dropdown
+    await clickButton(tabId, 'Past 7 days');
+
+    // Step 2: Select "Past 28 days" from the dropdown
+    await selectListOptionByForAttribute(tabId, "timeRange-past_4_weeks");
+    
+    // Step 3: Click "Show results" button
+    await clickButton(tabId, 'Show results');
+
+    // Wait for the results to load
+    await waitForPageLoad(tabId);
+
 
     // Wait for and click the "Export" button, and track the download
     const apiURL = await clickButtonAndTrackDownload(tabId, 'Export');

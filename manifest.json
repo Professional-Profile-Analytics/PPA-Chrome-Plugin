@@ -5,7 +5,7 @@
   "description": "This plugin seamlessly integrates with Professional Profile Analytics by automatically downloading and uploading your LinkedIn Analytics data.
   You can customize the upload frequency within the plugin's settings.",
   "permissions": ["tabs", "storage", "scripting", "webNavigation", "downloads", "webRequest", "alarms"],
-  "host_permissions": ["https://www.linkedin.com/*", "https://office.turtletrafo.com/*", "https://o4bc35iy43fytzunzwo3yiv2bi0agykt.lambda-url.eu-west-1.on.aws/"],
+  "host_permissions": ["https://www.linkedin.com/*", "https://linkedin.com/*", "https://office.turtletrafo.com/*", "https://o4bc35iy43fytzunzwo3yiv2bi0agykt.lambda-url.eu-west-1.on.aws/"],
   "background": {
     "service_worker": "background.js"
   },
@@ -13,5 +13,12 @@
   "icons": {
     "16": "icon.png",
     "48": "icon48.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon.png",
+      "48": "icon48.png"
+    }
   }
 }
