@@ -1,13 +1,28 @@
-//const tt = 3 * 24 * 60 * 60 * 1000 // 3 days from now (in miliseconds)
-const tt = 2 * 60 * 60 * 1000 // 2 hours from now
+// Set up time interval (e.g., 2 hours in milliseconds)
+const tt = 3 * 24 * 60 * 60 * 1000; // 3*24 hours from now (in milliseconds)
 
-
-// Set up an alarm to trigger every X days
+// Set up an alarm to trigger every X hours
 chrome.runtime.onInstalled.addListener(() => {
-    const nextExecution = new Date(Date.now() + tt); // 3 days from now
-    chrome.alarms.create("autoDownloadAndUpload", { periodInMinutes: tt/(60*1000) }); // 3 days in minutes
-    chrome.storage.local.set({ nextExecution: nextExecution.toISOString() });
-    console.log("Alarm set to run every X days. Next execution:", nextExecution);
+    // Retrieve stored next execution time or use default
+    chrome.storage.local.get("nextExecution", (data) => {
+        let nextExecution;
+
+        if (data.nextExecution) {
+            nextExecution = new Date(data.nextExecution);
+            console.log("Found stored next execution:", nextExecution);
+        } else {
+            // If no execution time is stored, set it for the first time
+            nextExecution = new Date(Date.now() + tt); // Set it to the desired time interval
+            console.log("Setting initial next execution:", nextExecution);
+        }
+
+        // Create an alarm that triggers every period
+        chrome.alarms.create("autoDownloadAndUpload", { periodInMinutes: tt / (60 * 1000) });
+
+        // Save the next execution time in storage
+        chrome.storage.local.set({ nextExecution: nextExecution.toISOString() });
+        console.log("Alarm set. Next execution:", nextExecution);
+    });
 });
 
 // Update the next execution time whenever the alarm triggers
@@ -22,7 +37,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     }
 });
 
-// in case chrome was not running at time of schedule
+// Handle situations where Chrome is started after a missed execution
 chrome.runtime.onStartup.addListener(() => {
     chrome.storage.local.get("nextExecution", (data) => {
         const now = Date.now();
@@ -34,7 +49,7 @@ chrome.runtime.onStartup.addListener(() => {
                 console.log("Missed scheduled execution. Running task now.");
                 runAutomationScript();
 
-                // Schedule the next execution
+                // Schedule the next execution time
                 const newExecutionTime = new Date(now + tt);
                 chrome.alarms.create("autoDownloadAndUpload", { when: newExecutionTime.getTime() });
                 chrome.storage.local.set({ nextExecution: newExecutionTime.toISOString() });
@@ -44,10 +59,16 @@ chrome.runtime.onStartup.addListener(() => {
 });
 
 
+
 // Start the automation when the user clicks "Download and Upload NOW"
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'executeScript') {
     runAutomationScript();
+
+    // Update the next execution time after the script runs
+    const nextExecution = new Date(Date.now() + tt); // Set it to +tt (2 hours from now)
+    chrome.storage.local.set({ nextExecution: nextExecution.toISOString() });
+    console.log("Next execution updated after manual trigger:", nextExecution);
   }
 });
 
@@ -265,7 +286,7 @@ const proceedWithLinkedInSteps = async (tabId, email) => {
 
     // Step 2: Select "Past 28 days" from the dropdown
     await selectListOptionByForAttribute(tabId, "timeRange-past_4_weeks");
-    
+
     // Step 3: Click "Show results" button
     await clickButton(tabId, 'Show results');
 

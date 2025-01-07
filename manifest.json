@@ -1,9 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Professional Profile Analytics",
-  "version": "1.0",
-  "description": "This plugin seamlessly integrates with Professional Profile Analytics by automatically downloading and uploading your LinkedIn Analytics data.
-  You can customize the upload frequency within the plugin's settings.",
+  "version": "1.1",
+  "description": "This plugin connects to Professional Profile Analytics and automatically uploads your LinkedIn Analytics data.",
   "permissions": ["tabs", "storage", "scripting", "webNavigation", "downloads", "webRequest", "alarms"],
   "host_permissions": ["https://www.linkedin.com/*", "https://linkedin.com/*", "https://office.turtletrafo.com/*", "https://o4bc35iy43fytzunzwo3yiv2bi0agykt.lambda-url.eu-west-1.on.aws/"],
   "background": {
