@@ -1,50 +1,19 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Options for PPA Plugin</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            padding: 20px;
-        }
-        label {
-            display: block;
-            margin-bottom: 10px;
-        }
-        input, select {
-            padding: 5px;
-            width: 100%;
-            margin-bottom: 10px;
-        }
-        button {
-            padding: 5px 10px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: #45a049;
-        }
-    </style>
+  <title>PPA Data Loader Settings</title>
 </head>
 <body>
-    <h1>Configure Auto Download Settings</h1>
-    <label for="frequency">Select Interval (in days):</label>
-    <select id="frequency">
-        <option value="2">Every 2 minutes (for testing)</option>
-        <option value="7">Every 7 days</option>
-        <option value="14">Every 14 days</option>
-        <option value="28">Every 28 days</option>
-    </select>
+  <h1>PPA Data Loader Settings</h1>
+  <label for="email">Email Address:</label>
+  <input type="email" id="email" placeholder="Enter your email">
+  <button id="save-email">Save Email</button>
+  <br><br>
+  <button id="run-script">Download and Upload NOW</button>
 
-    <label for="email">Enter your email address which you use on PPA for upload:</label>
-    <input type="email" id="email" placeholder="example@example.com" />
+  <h1>Next Execution</h1>
+<p id="nextExecution">Loading...</p>
 
-    <button id="save">Save</button>
-
-    <script src="options.js"></script>
+  <script src="options.js"></script>
 </body>
 </html>

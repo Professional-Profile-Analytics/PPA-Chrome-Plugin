@@ -1,18 +1,17 @@
 {
   "manifest_version": 3,
-  "name": "PPA Auto Data Loader",
+  "name": "Professional Profile Analytics",
   "version": "1.0",
-  "description": "This plugin downloads your LinkedIn Analytics data and uploads it to PPA automatically",
-  "permissions": ["scripting", "downloads", "activeTab", "tabs", "alarms", "storage"],
-  "host_permissions": ["https://www.linkedin.com/*"], //https://www.linkedin.com/analytics/creator/content/?metricType=IMPRESSIONS&timeRange=past_7_days
+  "description": "This plugin seamlessly integrates with Professional Profile Analytics by automatically downloading and uploading your LinkedIn Analytics data.
+  You can customize the upload frequency within the plugin's settings.",
+  "permissions": ["tabs", "storage", "scripting", "webNavigation", "downloads", "webRequest", "alarms"],
+  "host_permissions": ["https://www.linkedin.com/*", "https://office.turtletrafo.com/*", "https://o4bc35iy43fytzunzwo3yiv2bi0agykt.lambda-url.eu-west-1.on.aws/"],
   "background": {
     "service_worker": "background.js"
   },
-  "action": {
-    "default_icon": {
-      "128": "icon.png",
-      "48": "icon48.png"
-    }
-  },
-  "options_page": "options.html"  // Link to the options page
+  "options_page": "options.html",
+  "icons": {
+    "16": "icon.png",
+    "48": "icon48.png"
+  }
 }

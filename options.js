@@ -1,24 +1,44 @@
+document.addEventListener("DOMContentLoaded", function () {
+  // Get the email from storage and set it in the input field if it's available
+  chrome.storage.local.get("email", function (data) {
+    if (data.email) {
+      document.getElementById("email").value = data.email;  // Set the stored email to the input field
+    }
+  });
+
+  // Save the email when the user clicks the "Save Email" button
+  document.getElementById("save-email").addEventListener("click", function () {
+    const email = document.getElementById("email").value;
+    if (email) {
+      // Save the email to chrome storage
+      chrome.storage.local.set({ email: email }, function () {
+        alert("Email saved!");
+      });
+    } else {
+      alert("Please enter a valid email address.");
+    }
+  });
+
+});
+
+
+
+// 
+document.getElementById('run-script').addEventListener('click', () => {
+  chrome.runtime.sendMessage({ action: 'executeScript' });
+});
+
+
 document.addEventListener("DOMContentLoaded", () => {
-    // Load saved settings from storage
-    chrome.storage.sync.get(["downloadFrequency", "emailAddress"], (result) => {
-        const frequency = result.downloadFrequency || 7; // Default to 7 days
-        const email = result.emailAddress || ""; // Default to empty
+    const nextExecutionElement = document.getElementById("nextExecution");
 
-        document.getElementById("frequency").value = frequency;
-        document.getElementById("email").value = email;
-    });
-
-    // Save settings when the user clicks "Save"
-    document.getElementById("save").addEventListener("click", () => {
-        const frequency = parseInt(document.getElementById("frequency").value);
-        const email = document.getElementById("email").value.trim();
-
-        // Save the frequency and email address to storage
-        chrome.storage.sync.set({ downloadFrequency: frequency, emailAddress: email }, () => {
-            console.log(`Download frequency set to ${frequency === 2 ? "2 minutes (testing)" : `${frequency} days`}`);
-            console.log(`Email address saved as: ${email}`);
-            chrome.runtime.sendMessage({ action: "updateAlarm", frequency });
-            alert("Settings updated!");
-        });
+    // Retrieve the next execution time from storage
+    chrome.storage.local.get("nextExecution", (data) => {
+        if (data.nextExecution) {
+            const nextExecution = new Date(data.nextExecution);
+            nextExecutionElement.textContent = `The next execution is scheduled for: ${nextExecution.toLocaleString()}`;
+        } else {
+            nextExecutionElement.textContent = "No execution scheduled yet.";
+        }
     });
 });
