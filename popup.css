@@ -1,17 +1,25 @@
 body {
   font-family: Arial, sans-serif;
-  margin: 0;
-  padding: 10px;
-  width: 95%;
+  margin: 2px;
+  padding: 2px;
+  width: 100%;
 }
 img {
-  max-width: 350px;
+  max-width: 400px;
   height: auto;
 }
 h3 {
-  font-size: 18px;
+  font-size: 12px;
   color: #0073b1;
+  text-align: center;
 }
+
+.card-title {
+  font-size: 12px; /* Set the desired font size */
+  color: #0073b1; /* Optional: Set the text color */
+  font-weight: bold; /* Optional: Adjust font weight */
+}
+
 a {
   text-decoration: none;
   color: #005582;
@@ -19,19 +27,24 @@ a {
 a:hover {
   text-decoration: underline;
 }
+
 button {
-  width: 100%;
-  padding: 10px;
+  width: 50%;
+  padding: 4px;
   margin-top: 10px;
   background-color: #0073b1;
   color: white;
   border: none;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 12px;
+  display: block; /* Ensures the button behaves like a block element */
+  margin-left: auto; /* Aligns it horizontally */
+  margin-right: auto; /* Aligns it horizontally */
 }
 button:hover {
   background-color: #005582;
 }
+
 .error-message {
   color: #d9534f; /* Red for error */
   background-color: #f8d7da;
@@ -40,4 +53,24 @@ button:hover {
   border: 1px solid #f5c6cb;
   margin-bottom: 15px;
   font-size: 14px;
+  text-align: center;
+}
+
+
+.dashboard-block {
+  border: 1px solid #ccc;
+  padding: 0px;
+  margin: 2px;
+  border-radius: 5px;
+  vertical-align: top;
+  height: 50px;
+  width: 50px;
+  display: inline-block;
+  text-align: center;
+  line-height: 50px;
+  font-size: 14px;
+}
+
+.table {
+  font-size: 14px; /* Change to your desired font size */
 }

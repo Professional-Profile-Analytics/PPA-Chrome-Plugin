@@ -113,25 +113,34 @@ let downloadedFilePath = null;
 
 // Listen for a file download to capture the path
 chrome.downloads.onCreated.addListener((downloadItem) => {
+  // Define a condition to identify LinkedIn analytics files
+  const linkedInExportUrlPattern = "linkedin.com"; // Match LinkedIn domain
+  const expectedFileExtension = ".xlsx"; // Ensure it's an Excel file
 
-  // Check if the filename is empty, and extract it from the URL
-  if (!downloadItem.filename && downloadItem.finalUrl) {
-    // Try to extract the filename from the final URL
-    const url = new URL(downloadItem.finalUrl);
-    const fileNameFromUrl = url.searchParams.get("x-ambry-um-filename");
+  // Check if the download is from LinkedIn and matches expected criteria
+  if (downloadItem.finalUrl.includes(linkedInExportUrlPattern)) {
+    if (downloadItem.filename && downloadItem.filename.endsWith(expectedFileExtension)) {
+      // If filename is already set, use it directly
+      downloadedFilePath = downloadItem.filename;
+      console.log("LinkedIn analytics file downloaded:", downloadedFilePath);
+    } else if (!downloadItem.filename && downloadItem.finalUrl) {
+      // Try to extract the filename from the URL if not directly available
+      const url = new URL(downloadItem.finalUrl);
+      const fileNameFromUrl = url.searchParams.get("x-ambry-um-filename");
 
-    if (fileNameFromUrl && fileNameFromUrl.endsWith('.xlsx')) {
-      downloadedFilePath = fileNameFromUrl;
-      //console.error("File downloaded:", downloadedFilePath);
-    } else {
-      console.error("No valid .xlsx file found in the URL:", fileNameFromUrl);
+      if (fileNameFromUrl && fileNameFromUrl.endsWith(expectedFileExtension)) {
+        downloadedFilePath = fileNameFromUrl;
+        console.log("LinkedIn analytics file downloaded (from URL):", downloadedFilePath);
+      } else {
+        console.error("No valid .xlsx file found in the URL for LinkedIn analytics:", fileNameFromUrl);
+      }
     }
-  } else if (downloadItem.filename && downloadItem.filename.endsWith('.xlsx')) {
-    // If filename is already set, use it directly
-    downloadedFilePath = downloadItem.filename;
-    //console.error("File downloaded:", downloadedFilePath);
+  } else {
+    // Ignore downloads that don't match LinkedIn analytics export criteria
+    //console.log("Download ignored (not LinkedIn analytics):", downloadItem.finalUrl);
   }
 });
+
 
 
 // Helper function to wait for the page to load

@@ -5,20 +5,173 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Professional Profile Analytics</title>
   <link rel="stylesheet" href="popup.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
 </head>
 <body>
   <a href="https://ppa.turtletrafo.com" target="_blank">
     <img src="https://storage.googleapis.com/msgsndr/PdMChW3b3rqeve2L755O/media/6751c23a01fcb382459858f7.png" alt="Professional Profile Analytics">
   </a>
+
+<div id="apiResponse">Loading data...</div>
+
   <div id="dashboard" style="display: none;">
     <h3>Profile Health Dashboard</h3>
+
+<div class="container">
+      <div class="row">
+        <div class="col-6" style="display: inline-block; width: 45%; box-sizing: border-box; ">
+
+            <div class="card border-0">
+              <div class="card-body" style="display: flex; flex-direction: column; align-items: center;">
+                <h5 class="card-title">
+                  <b>Impressions</b>
+                </h5>
+                <div style="display: flex; justify-content: center;">
+                  <div class="dashboard-block">
+                    <a id="link_impressions" href="#impressions" target="_blank">
+                      <img id="impression_trend" src="https://storage.googleapis.com/msgsndr/PdMChW3b3rqeve2L755O/media/674f7b849264c9295eed70ca.png" width="40"></a>
+                    </div>
+                    <div class="dashboard-block">
+                      <span style="color:green" id="impressions">100%</span>
+                    </div>
+                  </div>
+
+              </div>
+            </div>
+          </div>
+          <div class="col-6" style="display: inline-block; width: 45%; box-sizing: border-box; ">
+
+              <div class="card border-0">
+                <div class="card-body" style="display: flex; flex-direction: column; align-items: center;">
+                  <h5 class="card-title">
+                    <b>Engagement</b>
+                  </h5>
+                  <div style="display: flex; justify-content: center;">
+                    <div class="dashboard-block">
+                      <a id="link_engagement" href="#engagement" target="_blank">
+                        <img id="engagement_trend" src="https://storage.googleapis.com/msgsndr/PdMChW3b3rqeve2L755O/media/674f7b849264c9295eed70ca.png" width="40"></a>
+                      </div>
+                      <div class="dashboard-block">
+                        <span style="color:green" id="engagement">100%</span>
+                      </div>
+
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-6" style="display: inline-block; width: 45%; box-sizing: border-box; ">
+
+                <div class="card border-0">
+                  <div class="card-body" style="display: flex; flex-direction: column; align-items: center;">
+                    <h5 class="card-title">
+                      <b>New Followers</b>
+                    </h5>
+                    <div style="display: flex; justify-content: center;">
+                      <div class="dashboard-block">
+                        <a id="link_followers" href="#followers" target="_blank">
+                          <img id="follower_trend" src="https://storage.googleapis.com/msgsndr/PdMChW3b3rqeve2L755O/media/674f7b849264c9295eed70ca.png" width="40"></a>
+                        </div>
+                        <div class="dashboard-block">
+                          <span style="color:green" id="new_followers">100%</span>
+                        </div>
+
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="col-6" style="display: inline-block; width: 45%; box-sizing: border-box; ">
+
+                  <div class="card border-0">
+                    <div class="card-body" style="display: flex; flex-direction: column; align-items: center;">
+                      <h5 class="card-title">
+                        <b>Posting Activity</b>
+                      </h5>
+                      <div style="display: flex; justify-content: center;">
+                        <div class="dashboard-block">
+                          <a id="link_posting_activity" href="#posting_activity" target="_blank">
+                            <img id="post_activity_trend" src="https://storage.googleapis.com/msgsndr/PdMChW3b3rqeve2L755O/media/67805cbdc845015f8a12761e.png" width="40"></a>
+                          </div>
+                          <div class="dashboard-block">
+                            <span style="color:green" id="post_activity">NA / 7</span>
+                          </div>
+                        </div>
+
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+        </div>
+
+<hr>
+
     <h3>Your Guiding Numbers</h3>
+
+    <table class="table table-striped" style="width: auto !important; margin-left: auto; margin-right: auto;">
+      <thead>
+        <tr>
+          <th style="text-align:left;">
+          </th>
+          <th style="text-align:left;">
+            minimum
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="text-align:left;">
+            Impressions per Post
+          </td>
+          <td style="text-align:left;" id="imp_per_post">
+            NA
+          </td>
+        </tr>
+        <tr>
+          <td style="text-align:left;">
+            Impressions per Day
+          </td>
+          <td style="text-align:left;" id="imp_per_day">
+            NA
+          </td>
+        </tr>
+        <tr>
+          <td style="text-align:left;">
+            New Followers per Day
+          </td>
+          <td style="text-align:left;" id="new_followers_day">
+            NA
+          </td>
+        </tr>
+        <tr>
+          <td style="text-align:left;">
+            Posts per Week
+          </td>
+          <td style="text-align:left;" id="posts_per_week">
+            NA
+          </td>
+        </tr>
+      </tbody>
+    </table>
   </div>
-  <center><a id="report-link" href="" style="display: none;">Link to your report</a></center>
+
+<hr>
+
+  <center><a id="report-link" href="" style="display: none;" target="_blank">Link to your advanced report</a> <span id="version">(last data upload ??)</span></center>
   <p id="error-message" class="error-message" style="display: none;">
     Please configure your email address in the plugin settings.
   </p>
-  <button id="settings">Open Plugin Settings</button>
+  <p id="error-message2" class="error-message" style="display: none;">
+    You are not subscribed for PPA advanced.<br>
+    Please subscribe here: <a href="https://ppa.turtletrafo.com/lpa-advanced" target="_blank">https://ppa.turtletrafo.com/lpa-advanced</a>
+  </p>
+
+  <div style="display: flex; justify-content: center; align-items: center;">
+    <button id="settings">Open Plugin Settings</button>
+  </div>
+
 </body>
 <script src="popup.js"></script>
 </html>
