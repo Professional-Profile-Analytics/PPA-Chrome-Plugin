@@ -5,7 +5,7 @@ document.addEventListener("DOMContentLoaded", async function () {
   const errorMessage2 = document.getElementById("error-message2");
   const settingsButton = document.getElementById("settings");
 
-  const apiUrl = "https://5tkpkldrszif7wej5l6kdqam3u0upiid.lambda-url.eu-west-1.on.aws/";
+  const apiUrl = "https://bzgaehjpqf45zsi4t32zuf6g7m0nrctb.lambda-url.us-east-1.on.aws/";
 
   // Check if the email is stored in local storage
   chrome.storage.local.get("email", async function (data) {
@@ -78,36 +78,36 @@ document.addEventListener("DOMContentLoaded", async function () {
 
             // health dashboard benchmark
             document.getElementById("post_activity").textContent = ( result.healthdata[0].avgposts > 7 ? 7 : result.healthdata[0].avgposts ) + " / 7";
-            if (result.healthdata[0].avgposts > 5) {
+            if (result.healthdata[0].avgposts >= 5) {
                 document.getElementById("post_activity").style.color = "green";
-            } else if (result.healthdata[0].avgposts <= 5 && result.healthdata[0].avgposts >= 3) {
+            } else if (result.healthdata[0].avgposts < 5 && result.healthdata[0].avgposts >= 3) {
                 document.getElementById("post_activity").style.color = "orange";
             } else {
                 document.getElementById("post_activity").style.color = "red";
             }
 
             document.getElementById("impressions").textContent = result.healthdata[0].imp_percentage + "%";
-            if (result.healthdata[0].imp_percentage > 50) {
+            if (result.healthdata[0].imp_percentage >= 100) {
                 document.getElementById("impressions").style.color = "green";
-            } else if (result.healthdata[0].imp_percentage <= 50 && result.healthdata[0].imp_percentage > 25) {
+            } else if (result.healthdata[0].imp_percentage < 100 && result.healthdata[0].imp_percentage > 50) {
                 document.getElementById("impressions").style.color = "orange";
             } else {
                 document.getElementById("impressions").style.color = "red";
             }
 
             document.getElementById("engagement").textContent = result.healthdata[0].eng_percentage + "%";
-            if (result.healthdata[0].eng_percentage > 50) {
+            if (result.healthdata[0].eng_percentage >= 100) {
                 document.getElementById("engagement").style.color = "green";
-            } else if (result.healthdata[0].eng_percentage <= 50 && result.healthdata[0].eng_percentage > 25) {
+            } else if (result.healthdata[0].eng_percentage < 100 && result.healthdata[0].eng_percentage > 50) {
                 document.getElementById("engagement").style.color = "orange";
             } else {
                 document.getElementById("engagement").style.color = "red";
             }
 
             document.getElementById("new_followers").textContent = result.healthdata[0].foll_percentage + "%";
-            if (result.healthdata[0].foll_percentage > 50) {
+            if (result.healthdata[0].foll_percentage >= 100) {
                 document.getElementById("new_followers").style.color = "green";
-            } else if (result.healthdata[0].foll_percentage <= 50 && result.healthdata[0].foll_percentage > 25) {
+            } else if (result.healthdata[0].foll_percentage < 100 && result.healthdata[0].foll_percentage > 50) {
                 document.getElementById("new_followers").style.color = "orange";
             } else {
                 document.getElementById("new_followers").style.color = "red";

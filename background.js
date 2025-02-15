@@ -326,7 +326,7 @@ const proceedWithLinkedInSteps = async (tabId, email) => {
 
 
 async function sendFileToWebhook(fileUrl, email) {
-    const webhookUrl = "https://o4bc35iy43fytzunzwo3yiv2bi0agykt.lambda-url.eu-west-1.on.aws";
+    const webhookUrl = "https://cwf6tbhekvwzbb35oe3psa7lza0oiaoj.lambda-url.us-east-1.on.aws/";
 
     try {
         if (!fileUrl) {
