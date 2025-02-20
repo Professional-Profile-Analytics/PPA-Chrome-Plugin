@@ -40,17 +40,17 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 // Handle situations where Chrome is started after a missed execution
 chrome.runtime.onStartup.addListener(() => {
     chrome.storage.local.get("nextExecution", (data) => {
-        const now = Date.now();
+        const now = new Date(); // Use Date object for current time
         if (data.nextExecution) {
-            const nextExecutionTime = new Date(data.nextExecution).getTime();
+            const nextExecution = new Date(data.nextExecution); // Convert stored time to Date object
 
             // If the scheduled time has passed, trigger the task immediately
-            if (now >= nextExecutionTime) {
+            if (now >= nextExecution) {
                 console.log("Missed scheduled execution. Running task now.");
                 runAutomationScript();
 
                 // Schedule the next execution time
-                const newExecutionTime = new Date(now + tt);
+                const newExecutionTime = new Date(now.getTime() + tt); // Use Date object for new time
                 chrome.alarms.create("autoDownloadAndUpload", { when: newExecutionTime.getTime() });
                 chrome.storage.local.set({ nextExecution: newExecutionTime.toISOString() });
             }
@@ -78,6 +78,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 async function runAutomationScript() {
   let email = null;
 
+  // Store the execution start time
+  const executionTime = new Date().toISOString();
+
+
   // Use Promise to get email from chrome storage synchronously
   await new Promise((resolve, reject) => {
     chrome.storage.local.get(['email'], (result) => {
@@ -101,6 +105,15 @@ async function runAutomationScript() {
     const tabId = tab.id;
     executeLinkedInSteps(tabId);
   });
+
+  // If successful, store the result
+  chrome.storage.local.set({
+            lastExecution: executionTime,
+            lastExecutionStatus: "✅ Success"
+  });
+
+  // console.log("Execution completed successfully.");
+
 }
 
 
@@ -156,7 +169,7 @@ function waitForPageLoad(tabId) {
           reject(chrome.runtime.lastError);
         } else if (results && results[0]?.result === 'complete') {
           clearInterval(checkInterval);
-          setTimeout(resolve, 3000); // Wait 1 second before proceeding
+          setTimeout(resolve, 5000); // Wait 1 second before proceeding
         }
       });
     }, 500); // Check every 500ms
@@ -165,28 +178,32 @@ function waitForPageLoad(tabId) {
 
 // Helper function to click on a link
 function clickLink(tabId, linkText) {
-  return new Promise((resolve, reject) => {
-    chrome.scripting.executeScript({
-      target: { tabId: tabId },
-      func: (text) => {
-        const links = Array.from(document.querySelectorAll('a'));
-        const link = links.find((a) => a.textContent.includes(text));
-        if (link) {
-          link.click();
-          return true;
-        } else {
-          throw new Error(`Link with text "${text}" not found.`);
-        }
-      },
-      args: [linkText]
-    }, (results) => {
-      if (chrome.runtime.lastError || !results[0]?.result) {
-        reject(new Error(`Failed to click link: ${linkText}`));
-      } else {
-        setTimeout(resolve, 3000); // Wait 1 second before continuing
-      }
+    return new Promise((resolve, reject) => {
+        chrome.scripting.executeScript({
+            target: { tabId: tabId },
+            func: (text) => {
+                const links = Array.from(document.querySelectorAll('a'));
+                const link = links.find((a) => a.textContent.includes(text));
+
+                if (link) {
+                    link.scrollIntoView({ behavior: "smooth", block: "center" }); // Scroll into view
+                    setTimeout(() => {
+                        link.click();
+                    }, 1500); // Wait 1.5s before clicking
+                    return true;
+                } else {
+                    return false;
+                }
+            },
+            args: [linkText]
+        }, (results) => {
+            if (chrome.runtime.lastError || !results[0]?.result) {
+                reject(new Error(`Failed to click link: ${linkText}`));
+            } else {
+                setTimeout(resolve, 3000); // Give time before the next step
+            }
+        });
     });
-  });
 }
 
 
@@ -434,3 +451,39 @@ async function clickButtonAndTrackDownload(tabId, buttonText) {
         }
     });
 }
+
+
+
+//////
+// Alarm check
+//////
+
+function checkAlarmsPermission() {
+    return new Promise((resolve) => {
+        let testAlarmName = "testAlarm";
+
+        // Create a short-lived test alarm
+        chrome.alarms.create(testAlarmName, { delayInMinutes: 0.1 });
+
+        // Listen for the test alarm
+        chrome.alarms.onAlarm.addListener(function testListener(alarm) {
+            if (alarm.name === testAlarmName) {
+                chrome.alarms.onAlarm.removeListener(testListener); // Cleanup
+                resolve(true); // Alarms are working
+            }
+        });
+
+        // Timeout if no alarm triggers (meaning alarms are disabled)
+        setTimeout(() => {
+            resolve(false); // Alarms are disabled or blocked
+        }, 10000); // Wait 10 seconds before assuming failure
+    });
+}
+
+async function detectAlarmsSupport() {
+    const alarmsEnabled = await checkAlarmsPermission();
+    chrome.storage.local.set({ alarmsEnabled });
+}
+
+chrome.runtime.onInstalled.addListener(detectAlarmsSupport);
+chrome.runtime.onStartup.addListener(detectAlarmsSupport);

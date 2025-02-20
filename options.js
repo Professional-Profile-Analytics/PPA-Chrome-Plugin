@@ -23,22 +23,51 @@ document.addEventListener("DOMContentLoaded", function () {
 
 
 
-// 
+//
 document.getElementById('run-script').addEventListener('click', () => {
   chrome.runtime.sendMessage({ action: 'executeScript' });
 });
 
 
+///////
+// get next and last execution information
+//////
 document.addEventListener("DOMContentLoaded", () => {
     const nextExecutionElement = document.getElementById("nextExecution");
+    const lastExecutionElement = document.getElementById("lastExecution");
 
-    // Retrieve the next execution time from storage
-    chrome.storage.local.get("nextExecution", (data) => {
+    chrome.storage.local.get(["nextExecution", "lastExecution", "lastExecutionStatus"], (data) => {
+        // Show next execution time
         if (data.nextExecution) {
             const nextExecution = new Date(data.nextExecution);
             nextExecutionElement.textContent = `The next execution is scheduled for: ${nextExecution.toLocaleString()}`;
         } else {
             nextExecutionElement.textContent = "No execution scheduled yet.";
         }
+
+        // Show last execution time and status
+        if (data.lastExecution) {
+            const lastExecution = new Date(data.lastExecution);
+            lastExecutionElement.innerHTML = `Last execution: ${lastExecution.toLocaleString()} <br>Status: ${data.lastExecutionStatus}`;
+        } else {
+            lastExecutionElement.textContent = "No execution has run yet.";
+        }
+    });
+});
+
+
+
+
+/////
+// alarm checker
+/////
+document.addEventListener("DOMContentLoaded", () => {
+    chrome.storage.local.get("alarmsEnabled", (data) => {
+        let message = data.alarmsEnabled
+            ? "✅ Chrome Alarms and Scheduling are enabled!"
+            : "⚠️ Warning: Chrome Alarms and Scheduling are disabled. Automated data upload will not not work.";
+
+        document.getElementById("alarmStatus").innerText = message;
+        document.getElementById("alarmStatus").style.color = data.alarmsEnabled ? "green" : "red";
     });
 });
