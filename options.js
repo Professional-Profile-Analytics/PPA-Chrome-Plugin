@@ -36,23 +36,41 @@ document.addEventListener("DOMContentLoaded", () => {
     const nextExecutionElement = document.getElementById("nextExecution");
     const lastExecutionElement = document.getElementById("lastExecution");
 
-    chrome.storage.local.get(["nextExecution", "lastExecution", "lastExecutionStatus"], (data) => {
-        // Show next execution time
-        if (data.nextExecution) {
-            const nextExecution = new Date(data.nextExecution);
-            nextExecutionElement.textContent = `The next execution is scheduled for: ${nextExecution.toLocaleString()}`;
-        } else {
-            nextExecutionElement.textContent = "No execution scheduled yet.";
+    chrome.storage.local.get(["nextExecution", "lastExecution", "lastExecutionStatus", "lastExecutionError"], (data) => {
+    // Show next execution time
+    if (data.nextExecution) {
+        const nextExecution = new Date(data.nextExecution);
+        nextExecutionElement.textContent = `The next execution is scheduled for: ${nextExecution.toLocaleString()}`;
+    } else {
+        nextExecutionElement.textContent = "No execution scheduled yet.";
+    }
+
+    // Show last execution time and status
+    if (data.lastExecution) {
+        const lastExecution = new Date(data.lastExecution);
+        let statusMessage = `Last execution: ${lastExecution.toLocaleString()} <br>Status: ${data.lastExecutionStatus}`;
+
+        if (data.lastExecutionError) {
+            try {
+                const errorDetails = JSON.parse(data.lastExecutionError);
+                statusMessage += `<br>Error Name: ${errorDetails.name}`;
+                statusMessage += `<br>Error Message: ${errorDetails.message}`;
+
+                // Add context details if available
+                if (errorDetails.context && Object.keys(errorDetails.context).length > 0) {
+                    statusMessage += `<br>Error Context: ${JSON.stringify(errorDetails.context, null, 2)}`;
+                }
+            } catch (parseError) {
+                // Fallback if JSON parsing fails
+                statusMessage += `<br>Error: ${data.lastExecutionError}`;
+            }
         }
 
-        // Show last execution time and status
-        if (data.lastExecution) {
-            const lastExecution = new Date(data.lastExecution);
-            lastExecutionElement.innerHTML = `Last execution: ${lastExecution.toLocaleString()} <br>Status: ${data.lastExecutionStatus}`;
-        } else {
-            lastExecutionElement.textContent = "No execution has run yet.";
-        }
-    });
+        lastExecutionElement.innerHTML = statusMessage;
+    } else {
+        lastExecutionElement.textContent = "No execution has run yet.";
+    }
+});
 });
 
 
