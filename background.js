@@ -5,14 +5,27 @@ const tt = 3 * 24 * 60 * 60 * 1000; // 3*24 hours from now (in milliseconds)
 chrome.runtime.onInstalled.addListener(() => {
     // Retrieve stored next execution time or use default
     chrome.storage.local.get("nextExecution", (data) => {
+        const now = new Date();
         let nextExecution;
 
         if (data.nextExecution) {
             nextExecution = new Date(data.nextExecution);
             console.log("Found stored next execution:", nextExecution);
+
+            // Check if the stored execution time is in the past
+            if (now >= nextExecution) {
+                console.log("Stored execution time is in the past. Running task now.");
+                // Run the automation task immediately
+                runAutomationScript();
+
+                // Calculate and set the new next execution time
+                nextExecution = new Date(now.getTime() + tt);
+                console.log("Updated next execution after immediate run:", nextExecution);
+
+            }
         } else {
             // If no execution time is stored, set it for the first time
-            nextExecution = new Date(Date.now() + tt); // Set it to the desired time interval
+            nextExecution = new Date(now.getTime() + tt); // Set it to the desired time interval
             console.log("Setting initial next execution:", nextExecution);
         }
 
@@ -24,6 +37,7 @@ chrome.runtime.onInstalled.addListener(() => {
         console.log("Alarm set. Next execution:", nextExecution);
     });
 });
+
 
 // Update the next execution time whenever the alarm triggers
 chrome.alarms.onAlarm.addListener((alarm) => {
@@ -56,6 +70,28 @@ chrome.runtime.onStartup.addListener(() => {
             }
         }
     });
+});
+
+
+// Listen for system idle state changes
+chrome.idle.onStateChanged.addListener((newState) => {
+  if (newState === "active") {
+    // Check if we missed any alarms while the system was idle/locked
+    chrome.storage.local.get("nextExecution", (data) => {
+      const now = new Date();
+      if (data.nextExecution) {
+        const nextExecution = new Date(data.nextExecution);
+        if (now >= nextExecution) {
+          console.log("Detected missed alarm after system idle. Running task now.");
+          runAutomationScript();
+          // Schedule the next execution
+          const newExecutionTime = new Date(now.getTime() + tt);
+          chrome.alarms.create("autoDownloadAndUpload", { when: newExecutionTime.getTime() });
+          chrome.storage.local.set({ nextExecution: newExecutionTime.toISOString() });
+        }
+      }
+    });
+  }
 });
 
 
@@ -105,14 +141,6 @@ async function runAutomationScript() {
     const tabId = tab.id;
     executeLinkedInSteps(tabId);
   });
-
-  // If successful, store the result
-  chrome.storage.local.set({
-            lastExecution: executionTime,
-            lastExecutionStatus: "✅ Success"
-  });
-
-  // console.log("Execution completed successfully.");
 
 }
 
@@ -334,6 +362,11 @@ const proceedWithLinkedInSteps = async (tabId, email) => {
 
   } catch (err) {
     console.error('Error during automation process:', err);
+    // ❌ Set execution status as failed
+    chrome.storage.local.set({
+        lastExecution: new Date().toISOString(),
+        lastExecutionStatus: `❌ Failed: ${err.message}`
+    });
   } finally {
     // Clean up by closing the tab
     chrome.tabs.remove(tabId);
@@ -385,73 +418,95 @@ async function sendFileToWebhook(fileUrl, email) {
         }
 
         console.log("File successfully uploaded:", await uploadResponse.json());
+
+        // ✅ Set execution status only if upload is successful
+        chrome.storage.local.set({
+            lastExecution: new Date().toISOString(),
+            lastExecutionStatus: "✅ Success"
+        });
+
     } catch (error) {
         console.error("Error during the upload process:", error);
+
+        // ❌ Set execution status as failed
+        chrome.storage.local.set({
+            lastExecution: new Date().toISOString(),
+            lastExecutionStatus: `❌ Failed: ${error.message}`
+        });
     }
 }
 
 
 
-async function clickButtonAndTrackDownload(tabId, buttonText) {
+async function clickButtonAndTrackDownload(tabId, buttonText, retryCount = 2) {
     return new Promise((resolve, reject) => {
         let downloadTimeout = 15000; // Timeout after 15 seconds if no file is downloaded
+        let retryDelay = 10000; // Wait 10 seconds before retrying
         let apiURL = null;
+        let attempt = 0; // Track the number of attempts
 
-        try {
-            // Start tracking network requests
-            chrome.webRequest.onCompleted.addListener(
-                (details) => {
+        function attemptClick() {
+            attempt++;
+            console.log(`Attempt ${attempt}: Clicking button "${buttonText}"`);
+
+            try {
+                // Start tracking network requests
+                let listener = (details) => {
                     if (details.method === "GET" && details.url.includes(".xlsx")) {
-                        //console.log("Excel file request detected:", details.url);
                         apiURL = details.url;
+                        console.log("Excel file request detected:", apiURL);
+                        chrome.webRequest.onCompleted.removeListener(listener);
                         resolve(apiURL); // Resolve the promise with the URL
                     }
-                },
-                { urls: ["<all_urls>"] } // Match all URLs
-            );
+                };
 
-            // Execute the button click
-            chrome.scripting.executeScript(
-                {
-                    target: { tabId: tabId },
-                    func: (text) => {
-                        const button = Array.from(
-                            document.querySelectorAll("button")
-                        ).find((btn) => btn.textContent.includes(text));
-                        if (button) {
-                            button.click();
-                            return true;
-                        } else {
-                            throw new Error(`Button with text "${text}" not found.`);
-                        }
+                chrome.webRequest.onCompleted.addListener(listener, { urls: ["<all_urls>"] });
+
+                // Execute the button click
+                chrome.scripting.executeScript(
+                    {
+                        target: { tabId: tabId },
+                        func: (text) => {
+                            const button = Array.from(document.querySelectorAll("button"))
+                                .find((btn) => btn.textContent.includes(text));
+                            if (button) {
+                                button.click();
+                                return true;
+                            } else {
+                                throw new Error(`Button with text "${text}" not found.`);
+                            }
+                        },
+                        args: [buttonText],
                     },
-                    args: [buttonText],
-                },
-                (results) => {
-                    if (chrome.runtime.lastError || !results[0]?.result) {
-                        reject(
-                            new Error(`Failed to click button: ${buttonText}`)
-                        );
+                    (results) => {
+                        if (chrome.runtime.lastError || !results[0]?.result) {
+                            reject(new Error(`Failed to click button: ${buttonText}`));
+                        }
                     }
-                }
-            );
+                );
 
-            // Set a timeout to prevent indefinite waiting
-            setTimeout(() => {
-                if (!apiURL) {
-                    reject(
-                        new Error(
-                            "No .xlsx download request detected within the timeout period."
-                        )
-                    );
-                }
-            }, downloadTimeout);
-        } catch (error) {
-            reject(new Error("Error during button click and tracking: " + error.message));
+                // Retry logic
+                setTimeout(() => {
+                    if (!apiURL && attempt <= retryCount) {
+                        console.log(`Retrying... Attempt ${attempt + 1}`);
+                        attemptClick(); // Retry clicking the button
+                    } else if (!apiURL) {
+                        reject(new Error("No .xlsx download request detected within the timeout period."));
+                    }
+                }, retryDelay);
+            } catch (error) {
+                // ❌ Set execution status as failed
+                chrome.storage.local.set({
+                    lastExecution: new Date().toISOString(),
+                    lastExecutionStatus: `❌ Failed: ${error.message}`
+                });
+                reject(new Error("Error during button click and tracking: " + error.message));
+            }
         }
+
+        attemptClick(); // Start the first attempt
     });
 }
-
 
 
 //////
@@ -487,3 +542,43 @@ async function detectAlarmsSupport() {
 
 chrome.runtime.onInstalled.addListener(detectAlarmsSupport);
 chrome.runtime.onStartup.addListener(detectAlarmsSupport);
+
+
+
+/////////
+// Watchdog to check for missed executio
+/////////
+
+// Create a watchdog alarm that checks every 5 minutes
+chrome.alarms.create("watchdog", { periodInMinutes: 60 });
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === "watchdog") {
+    // Check if main task execution was missed
+    checkForMissedExecutions();
+  } else if (alarm.name === "autoDownloadAndUpload") {
+      const nextExecution = new Date(Date.now() + tt);
+      chrome.storage.local.set({ nextExecution: nextExecution.toISOString() });
+      console.log("Alarm triggered. Next execution:", nextExecution);
+
+      // Start the automation process
+      runAutomationScript();
+  }
+});
+
+function checkForMissedExecutions() {
+  chrome.storage.local.get("nextExecution", (data) => {
+    const now = new Date();
+    if (data.nextExecution) {
+      const nextExecution = new Date(data.nextExecution);
+      if (now >= nextExecution) {
+        console.log("Watchdog detected missed execution. Running task now.");
+        runAutomationScript();
+        // Schedule next execution
+        const newExecutionTime = new Date(now.getTime() + tt);
+        chrome.alarms.create("autoDownloadAndUpload", { when: newExecutionTime.getTime() });
+        chrome.storage.local.set({ nextExecution: newExecutionTime.toISOString() });
+      }
+    }
+  });
+}
