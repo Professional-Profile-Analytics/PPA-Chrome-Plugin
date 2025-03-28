@@ -36,7 +36,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const nextExecutionElement = document.getElementById("nextExecution");
     const lastExecutionElement = document.getElementById("lastExecution");
 
-    chrome.storage.local.get(["nextExecution", "lastExecution", "lastExecutionStatus", "lastExecutionError"], (data) => {
+    chrome.storage.local.get(["nextExecution", "lastExecutionTime", "lastExecutionStatus", "lastExecutionError"], (data) => {
     // Show next execution time
     if (data.nextExecution) {
         const nextExecution = new Date(data.nextExecution);
@@ -46,9 +46,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // Show last execution time and status
-    if (data.lastExecution) {
-        const lastExecution = new Date(data.lastExecution);
-        let statusMessage = `Last execution: ${lastExecution.toLocaleString()} <br>Status: ${data.lastExecutionStatus}`;
+    if (data.lastExecutionTime) {
+        const lastExecutionTime = new Date(data.lastExecutionTime);
+        let statusMessage = `Last execution: ${lastExecutionTime.toLocaleString()} <br>Status: ${data.lastExecutionStatus}`;
 
         if (data.lastExecutionError) {
             try {

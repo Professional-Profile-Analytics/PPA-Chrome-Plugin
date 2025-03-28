@@ -116,7 +116,7 @@ const WebRequestTracker = {
 
 // Browser Tab Interaction Utilities
 const TabInteractions = {
-    waitForPageLoad(tabId, maxWait = 10000) {
+    waitForPageLoad(tabId, maxWait = 50000) {
         return new Promise((resolve, reject) => {
             const startTime = Date.now();
 
@@ -545,6 +545,13 @@ function setupRuntimeListeners() {
     // Handle manual script execution
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (message.action === 'executeScript') {
+
+            const nextExecution = new Date(Date.now() + EXECUTION_INTERVAL);
+            chrome.storage.local.set({
+                nextExecution: nextExecution.toISOString()
+            });
+
+            Logger.log(`Manual execution triggered. Next execution: ${nextExecution}`);
             runAutomationScript();
         }
     });
