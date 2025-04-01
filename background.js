@@ -1,5 +1,5 @@
 // Constants
-const EXECUTION_INTERVAL = 3 * 24 * 60 * 60 * 1000; // 3 days in milliseconds
+let EXECUTION_INTERVAL = 3 * 24 * 60 * 60 * 1000; // 3 days in milliseconds
 const ALARM_NAME = "autoDownloadAndUpload";
 const WATCHDOG_ALARM_NAME = "watchdog";
 const WEBHOOK_URL = "https://cwf6tbhekvwzbb35oe3psa7lza0oiaoj.lambda-url.us-east-1.on.aws/";
@@ -113,6 +113,28 @@ const WebRequestTracker = {
         });
     }
 };
+
+
+
+// Add this function to initialize the interval based on stored settings
+async function initializeExecutionInterval() {
+    return new Promise((resolve) => {
+        chrome.storage.local.get(['uploadFrequency'], (result) => {
+            if (result.uploadFrequency) {
+                switch(result.uploadFrequency) {
+                    case 'daily':
+                        EXECUTION_INTERVAL = 24 * 60 * 60 * 1000; // 1 day
+                        break;
+                    default:
+                        EXECUTION_INTERVAL = 3 * 24 * 60 * 60 * 1000; // 3 days (default)
+                }
+            }
+            Logger.log(`Execution interval set to ${EXECUTION_INTERVAL / (24 * 60 * 60 * 1000)} days`);
+            resolve();
+        });
+    });
+}
+
 
 // Browser Tab Interaction Utilities
 const TabInteractions = {
@@ -457,38 +479,41 @@ async function runAutomationScript() {
 
 // Alarm and Scheduling Management
 const AlarmManager = {
-    setupInitialAlarm() {
-        chrome.storage.local.get("nextExecution", (data) => {
-            const now = new Date();
-            let nextExecution;
+  setupInitialAlarm: async function() {
+      await initializeExecutionInterval();
 
-            if (data.nextExecution) {
-                nextExecution = new Date(data.nextExecution);
+      chrome.storage.local.get("nextExecution", (data) => {
+          const now = new Date();
+          let nextExecution;
 
-                // Check if stored execution time is in the past
-                if (now >= nextExecution) {
-                    Logger.log("Stored execution time is in the past. Running task now.");
-                    runAutomationScript();
-                    nextExecution = new Date(now.getTime() + EXECUTION_INTERVAL);
-                }
-            } else {
-                // First-time setup
-                nextExecution = new Date(now.getTime() + EXECUTION_INTERVAL);
-            }
+          if (data.nextExecution) {
+              nextExecution = new Date(data.nextExecution);
 
-            // Create recurring alarm
-            chrome.alarms.create(ALARM_NAME, {
-                periodInMinutes: EXECUTION_INTERVAL / (60 * 1000)
-            });
+              // Check if stored execution time is in the past
+              if (now >= nextExecution) {
+                  Logger.log("Stored execution time is in the past. Running task now.");
+                  runAutomationScript();
+                  nextExecution = new Date(now.getTime() + EXECUTION_INTERVAL);
+              }
+          } else {
+              // First-time setup
+              nextExecution = new Date(now.getTime() + EXECUTION_INTERVAL);
+          }
 
-            // Save next execution time
-            chrome.storage.local.set({
-                nextExecution: nextExecution.toISOString()
-            });
+          // Create recurring alarm
+          chrome.alarms.create(ALARM_NAME, {
+              periodInMinutes: EXECUTION_INTERVAL / (60 * 1000)
+          });
 
-            Logger.log(`Alarm set. Next execution: ${nextExecution}`);
-        });
-    },
+          // Save next execution time
+          chrome.storage.local.set({
+              nextExecution: nextExecution.toISOString()
+          });
+
+          Logger.log(`Alarm set. Next execution: ${nextExecution}`);
+      });
+  },
+
 
     setupWatchdogAlarm() {
         chrome.alarms.create(WATCHDOG_ALARM_NAME, { periodInMinutes: 60 });
@@ -545,7 +570,6 @@ function setupRuntimeListeners() {
     // Handle manual script execution
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (message.action === 'executeScript') {
-
             const nextExecution = new Date(Date.now() + EXECUTION_INTERVAL);
             chrome.storage.local.set({
                 nextExecution: nextExecution.toISOString()
@@ -553,6 +577,26 @@ function setupRuntimeListeners() {
 
             Logger.log(`Manual execution triggered. Next execution: ${nextExecution}`);
             runAutomationScript();
+        }
+        else if (message.action === 'updateInterval') {
+            // Update the execution interval
+            EXECUTION_INTERVAL = message.interval;
+
+            // Reset the alarm with the new interval
+            chrome.alarms.clear(ALARM_NAME, (wasCleared) => {
+                if (wasCleared) {
+                    const nextExecution = new Date(Date.now() + EXECUTION_INTERVAL);
+                    chrome.alarms.create(ALARM_NAME, {
+                        periodInMinutes: EXECUTION_INTERVAL / (60 * 1000)
+                    });
+
+                    chrome.storage.local.set({
+                        nextExecution: nextExecution.toISOString()
+                    });
+
+                    Logger.log(`Execution interval updated to ${EXECUTION_INTERVAL / (24 * 60 * 60 * 1000)} days. Next execution: ${nextExecution}`);
+                }
+            });
         }
     });
 
@@ -578,4 +622,10 @@ function setupRuntimeListeners() {
 }
 
 // Initialize the extension
-setupRuntimeListeners();
+async function initializeExtension() {
+    await initializeExecutionInterval();
+    setupRuntimeListeners();
+}
+
+// Initialize the extension
+initializeExtension();

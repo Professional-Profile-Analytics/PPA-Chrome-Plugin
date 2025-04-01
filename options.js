@@ -19,6 +19,46 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   });
 
+
+  chrome.storage.local.get(['uploadFrequency'], function(result) {
+     if (result.uploadFrequency) {
+       document.getElementById('uploadFrequency').value = result.uploadFrequency;
+     }
+   });
+
+   // Save frequency setting
+   document.getElementById('saveFrequency').addEventListener('click', function() {
+     const frequency = document.getElementById('uploadFrequency').value;
+
+     chrome.storage.local.set({ uploadFrequency: frequency }, function() {
+       // Update the interval in milliseconds based on selection
+       let interval;
+       switch(frequency) {
+         case 'daily':
+           interval = 24 * 60 * 60 * 1000; // 1 day
+           break;
+         default:
+           interval = 3 * 24 * 60 * 60 * 1000; // 3 days (default)
+       }
+
+       // Send message to background script to update interval
+       chrome.runtime.sendMessage({
+         action: 'updateInterval',
+         interval: interval
+       });
+
+       // Show status message
+       const statusElement = document.getElementById('frequencyStatus');
+       statusElement.textContent = 'Frequency saved!';
+       statusElement.style.color = 'green';
+
+       // Clear status message after 3 seconds
+       setTimeout(() => {
+         statusElement.textContent = '';
+       }, 3000);
+     });
+   });
+
 });
 
 

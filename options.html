@@ -8,13 +8,27 @@
 </head>
 <body>
   <div class="container">
-    <img src="https://storage.googleapis.com/msgsndr/PdMChW3b3rqeve2L755O/media/6751c23a01fcb382459858f7.png" alt="PPA Data Loader Logo" class="header-image">
+    <img src="https://storage.googleapis.com/msgsndr/PdMChW3b3rqeve2L755O/media/67ec3484e519ed5c6c31ccfb.png" alt="PPA Data Loader Logo" class="header-image">
     <h1>Professional Profile Analytics - Plugin Settings</h1>
 
     <div class="section">
+      <h2>Configuration</h2>
+      <div>
       <label for="email">Your Email Address used for registration at PPA:</label><br>
       <input type="email" id="email" placeholder="Enter your email">
       <button id="save-email">Save Email</button>
+    </div>
+
+
+    <div class="form-group" style="margin-top:20px;">
+      <select id="uploadFrequency" class="form-control">
+        <option value="daily">Daily</option>
+        <option value="3days" selected>Every 3 days (Default)</option>
+      </select>
+    <button id="saveFrequency" class="btn btn-primary">Save Frequency</button>
+  </div>
+    <div id="frequencyStatus" class="status-message"></div>
+
     </div>
 
     <div class="section" style="margin-top:40px;">
