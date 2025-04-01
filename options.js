@@ -47,6 +47,9 @@ document.addEventListener("DOMContentLoaded", function () {
          interval: interval
        });
 
+       // Calculate and display the next execution time
+       updateNextExecutionDisplay(interval);
+
        // Show status message
        const statusElement = document.getElementById('frequencyStatus');
        statusElement.textContent = 'Frequency saved!';
@@ -61,7 +64,22 @@ document.addEventListener("DOMContentLoaded", function () {
 
 });
 
+// Function to update the next execution display
+function updateNextExecutionDisplay(interval) {
+  const nextExecutionElement = document.getElementById("nextExecution");
 
+  // Get the current time
+  const now = new Date();
+
+  // Calculate the next execution time based on the new interval
+  const nextExecution = new Date(now.getTime() + interval);
+
+  // Update the storage with the new next execution time
+  chrome.storage.local.set({ nextExecution: nextExecution.getTime() });
+
+  // Update the display
+  nextExecutionElement.textContent = `The next execution is scheduled for: ${nextExecution.toLocaleString()}`;
+}
 
 //
 document.getElementById('run-script').addEventListener('click', () => {

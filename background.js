@@ -2,7 +2,10 @@
 let EXECUTION_INTERVAL = 3 * 24 * 60 * 60 * 1000; // 3 days in milliseconds
 const ALARM_NAME = "autoDownloadAndUpload";
 const WATCHDOG_ALARM_NAME = "watchdog";
+const RETRY_ALARM_NAME = "retryExecution";
 const WEBHOOK_URL = "https://cwf6tbhekvwzbb35oe3psa7lza0oiaoj.lambda-url.us-east-1.on.aws/";
+const RETRY_INTERVAL = 60 * 60 * 1000; // 60 minutes in milliseconds
+const MAX_RETRIES = 2; // Maximum number of retries
 
 // Logging utility
 const Logger = {
@@ -54,37 +57,63 @@ const ConfigManager = {
     },
 
     async updateExecutionStatus(status, error = null) {
-      const statusRecord = {
-          timestamp: new Date().toISOString(),
-          status: status
-      };
+        const statusRecord = {
+            timestamp: new Date().toISOString(),
+            status: status
+        };
 
-      if (error) {
-          statusRecord.error = {
-              message: error.message,
-              name: error.name,
-              context: error.context || {},
-              stack: error.stack
-          };
-      }
+        if (error) {
+            statusRecord.error = {
+                message: error.message,
+                name: error.name,
+                context: error.context || {},
+                stack: error.stack
+            };
+        }
 
-      return new Promise((resolve) => {
-          chrome.storage.local.set({
-              lastExecutionStatus: statusRecord.status,
-              lastExecutionError: error ? JSON.stringify({
-                  message: error.message,
-                  name: error.name,
-                  context: error.context,
-                  stack: error.stack
-              }, null, 2) : null,
-              lastExecutionTime: statusRecord.timestamp
-          }, () => {
-              Logger.log(`Execution status updated: ${status}`);
-              resolve();
-          });
-      });
-  }
-  }
+        return new Promise((resolve) => {
+            chrome.storage.local.set({
+                lastExecutionStatus: statusRecord.status,
+                lastExecutionError: error ? JSON.stringify({
+                    message: error.message,
+                    name: error.name,
+                    context: error.context,
+                    stack: error.stack
+                }, null, 2) : null,
+                lastExecutionTime: statusRecord.timestamp
+            }, () => {
+                Logger.log(`Execution status updated: ${status}`);
+                resolve();
+            });
+        });
+    },
+
+    async getRetryCount() {
+        return new Promise((resolve) => {
+            chrome.storage.local.get(['retryCount'], (result) => {
+                resolve(result.retryCount || 0);
+            });
+        });
+    },
+
+    async updateRetryCount(count) {
+        return new Promise((resolve) => {
+            chrome.storage.local.set({ retryCount: count }, () => {
+                Logger.log(`Retry count updated: ${count}`);
+                resolve();
+            });
+        });
+    },
+
+    async resetRetryCount() {
+        return new Promise((resolve) => {
+            chrome.storage.local.set({ retryCount: 0 }, () => {
+                Logger.log('Retry count reset to 0');
+                resolve();
+            });
+        });
+    }
+};
 
 // Web Request Utilities
 const WebRequestTracker = {
@@ -351,26 +380,31 @@ const LinkedInAutomation = {
 
             // Track and download file
             let buttonClicked = false;
-             try {
-                 await TabInteractions.clickButton(tabId, 'Export');
-                 buttonClicked = true;
-             } catch (error) {
-                 Logger.warn("First attempt to click 'Export' failed, retrying in 15 seconds...");
-                 await new Promise(resolve => setTimeout(resolve, 15000));
-                 await TabInteractions.clickButton(tabId, 'Export');
-             }
+            try {
+                await TabInteractions.clickButton(tabId, 'Export');
+                buttonClicked = true;
+            } catch (error) {
+                Logger.warn("First attempt to click 'Export' failed, retrying in 15 seconds...");
+                await new Promise(resolve => setTimeout(resolve, 15000));
+                await TabInteractions.clickButton(tabId, 'Export');
+            }
 
             // Get download URL and upload file
+            const downloadTracker = WebRequestTracker.trackDownload(tabId);
             const apiURL = await downloadTracker;
             await FileUploader.uploadToWebhook(apiURL, email);
 
             // Update successful execution status
             await ConfigManager.updateExecutionStatus('✅Success');
+            // Reset retry count on success
+            await ConfigManager.resetRetryCount();
 
         } catch (error) {
             // Log and update failed execution status
             Logger.error(`LinkedIn automation failed: ${error.message}`);
             await ConfigManager.updateExecutionStatus('Failed', error);
+            // Schedule retry
+            await scheduleRetry();
             throw error;
         } finally {
             // Always close the tab
@@ -378,27 +412,30 @@ const LinkedInAutomation = {
         }
     },
 
-
     async executeStepsDirect(tabId, email) {
-    try {
-        // Wait for initial page load
-        await TabInteractions.waitForPageLoad(tabId);
+        try {
+            // Wait for initial page load
+            await TabInteractions.waitForPageLoad(tabId);
 
-        // Attempt to download file with multiple button click strategies
-        await this.clickExportButton(tabId, email);
+            // Attempt to download file with multiple button click strategies
+            await this.clickExportButton(tabId, email);
 
-        // Update successful execution status
-        await ConfigManager.updateExecutionStatus('✅Success');
+            // Update successful execution status
+            await ConfigManager.updateExecutionStatus('✅Success');
+            // Reset retry count on success
+            await ConfigManager.resetRetryCount();
 
-    } catch (error) {
-        // Log and update failed execution status
-        Logger.error(`LinkedIn direct automation failed: ${error.message}`);
-        await ConfigManager.updateExecutionStatus('Failed', error);
-        throw error;
-    } finally {
-        // Always close the tab
-        chrome.tabs.remove(tabId);
-    }
+        } catch (error) {
+            // Log and update failed execution status
+            Logger.error(`LinkedIn direct automation failed: ${error.message}`);
+            await ConfigManager.updateExecutionStatus('Failed', error);
+            // Schedule retry
+            await scheduleRetry();
+            throw error;
+        } finally {
+            // Always close the tab
+            chrome.tabs.remove(tabId);
+        }
     },
 
     async clickExportButton(tabId, email) {
@@ -439,10 +476,27 @@ const LinkedInAutomation = {
             });
         }
     }
-
-
-
 };
+
+// Retry Mechanism
+async function scheduleRetry() {
+    const currentRetryCount = await ConfigManager.getRetryCount();
+
+    if (currentRetryCount < MAX_RETRIES) {
+        const newRetryCount = currentRetryCount + 1;
+        await ConfigManager.updateRetryCount(newRetryCount);
+
+        // Schedule retry alarm for 60 minutes later
+        const retryTime = Date.now() + RETRY_INTERVAL;
+        chrome.alarms.create(RETRY_ALARM_NAME, { when: retryTime });
+
+        Logger.log(`Scheduled retry #${newRetryCount} in 60 minutes. Time: ${new Date(retryTime).toISOString()}`);
+    } else {
+        Logger.log(`Maximum retry attempts (${MAX_RETRIES}) reached. No more retries will be scheduled.`);
+        // Reset retry count after max attempts
+        await ConfigManager.resetRetryCount();
+    }
+}
 
 // Main Automation Script
 async function runAutomationScript() {
@@ -455,7 +509,7 @@ async function runAutomationScript() {
 
         if (useDirect) {
             // New solution: use executeStepsDirect
-            chrome.tabs.create({ url: "https://www.linkedin.com/analytics/creator/content/?metricType=IMPRESSIONS&timeRange=past_4_weeks", active: false }, (tab) => { // Example: Change URL here
+            chrome.tabs.create({ url: "https://www.linkedin.com/analytics/creator/content/?metricType=IMPRESSIONS&timeRange=past_4_weeks", active: false }, (tab) => {
                 LinkedInAutomation.executeStepsDirect(tab.id, email)
                     .catch(error => {
                         Logger.error(`Direct automation script failed: ${error.message}`);
@@ -474,46 +528,46 @@ async function runAutomationScript() {
     } catch (error) {
         Logger.error(`Automation initialization failed: ${error.message}`);
         await ConfigManager.updateExecutionStatus('Failed', error);
+        await scheduleRetry();
     }
 }
 
 // Alarm and Scheduling Management
 const AlarmManager = {
-  setupInitialAlarm: async function() {
-      await initializeExecutionInterval();
+    setupInitialAlarm: async function() {
+        await initializeExecutionInterval();
 
-      chrome.storage.local.get("nextExecution", (data) => {
-          const now = new Date();
-          let nextExecution;
+        chrome.storage.local.get("nextExecution", (data) => {
+            const now = new Date();
+            let nextExecution;
 
-          if (data.nextExecution) {
-              nextExecution = new Date(data.nextExecution);
+            if (data.nextExecution) {
+                nextExecution = new Date(data.nextExecution);
 
-              // Check if stored execution time is in the past
-              if (now >= nextExecution) {
-                  Logger.log("Stored execution time is in the past. Running task now.");
-                  runAutomationScript();
-                  nextExecution = new Date(now.getTime() + EXECUTION_INTERVAL);
-              }
-          } else {
-              // First-time setup
-              nextExecution = new Date(now.getTime() + EXECUTION_INTERVAL);
-          }
+                // Check if stored execution time is in the past
+                if (now >= nextExecution) {
+                    Logger.log("Stored execution time is in the past. Running task now.");
+                    runAutomationScript();
+                    nextExecution = new Date(now.getTime() + EXECUTION_INTERVAL);
+                }
+            } else {
+                // First-time setup
+                nextExecution = new Date(now.getTime() + EXECUTION_INTERVAL);
+            }
 
-          // Create recurring alarm
-          chrome.alarms.create(ALARM_NAME, {
-              periodInMinutes: EXECUTION_INTERVAL / (60 * 1000)
-          });
+            // Create recurring alarm
+            chrome.alarms.create(ALARM_NAME, {
+                periodInMinutes: EXECUTION_INTERVAL / (60 * 1000)
+            });
 
-          // Save next execution time
-          chrome.storage.local.set({
-              nextExecution: nextExecution.toISOString()
-          });
+            // Save next execution time
+            chrome.storage.local.set({
+                nextExecution: nextExecution.toISOString()
+            });
 
-          Logger.log(`Alarm set. Next execution: ${nextExecution}`);
-      });
-  },
-
+            Logger.log(`Alarm set. Next execution: ${nextExecution}`);
+        });
+    },
 
     setupWatchdogAlarm() {
         chrome.alarms.create(WATCHDOG_ALARM_NAME, { periodInMinutes: 60 });
@@ -527,6 +581,9 @@ const AlarmManager = {
                     break;
                 case WATCHDOG_ALARM_NAME:
                     this.checkForMissedExecutions();
+                    break;
+                case RETRY_ALARM_NAME:
+                    this.handleRetryAlarm();
                     break;
             }
         });
@@ -562,6 +619,11 @@ const AlarmManager = {
                 }
             }
         });
+    },
+
+    handleRetryAlarm() {
+        Logger.log("Retry alarm triggered. Attempting automation again.");
+        runAutomationScript();
     }
 };
 
