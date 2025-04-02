@@ -4,7 +4,7 @@ const ALARM_NAME = "autoDownloadAndUpload";
 const WATCHDOG_ALARM_NAME = "watchdog";
 const RETRY_ALARM_NAME = "retryExecution";
 const WEBHOOK_URL = "https://cwf6tbhekvwzbb35oe3psa7lza0oiaoj.lambda-url.us-east-1.on.aws/";
-const RETRY_INTERVAL = 60 * 60 * 1000; // 60 minutes in milliseconds
+const RETRY_INTERVAL = 5 * 60 * 1000; // 5 minutes in milliseconds
 const MAX_RETRIES = 2; // Maximum number of retries
 
 // Logging utility
@@ -193,7 +193,7 @@ const TabInteractions = {
                     } else if (results && results[0]?.result === 'complete') {
                         clearInterval(checkInterval);
                         // Add a small buffer after page load
-                        setTimeout(resolve, 2000);
+                        setTimeout(resolve, 5000);
                     }
                 });
             }, 500);
@@ -228,7 +228,7 @@ const TabInteractions = {
                     }));
                 } else {
                     // Wait a bit after clicking to allow for potential UI updates
-                    setTimeout(resolve, 2000);
+                    setTimeout(resolve, 5000);
                 }
             });
         });
@@ -262,7 +262,7 @@ const TabInteractions = {
                     }));
                 } else {
                     // Wait a bit after clicking to allow for potential UI updates
-                    setTimeout(resolve, 2000);
+                    setTimeout(resolve, 5000);
                 }
             });
         });
@@ -293,7 +293,7 @@ const TabInteractions = {
                     }));
                 } else {
                     // Wait a bit after selecting to allow for potential UI updates
-                    setTimeout(resolve, 2000);
+                    setTimeout(resolve, 5000);
                 }
             });
         });
@@ -486,11 +486,11 @@ async function scheduleRetry() {
         const newRetryCount = currentRetryCount + 1;
         await ConfigManager.updateRetryCount(newRetryCount);
 
-        // Schedule retry alarm for 60 minutes later
+        // Schedule retry alarm for 5 minutes later
         const retryTime = Date.now() + RETRY_INTERVAL;
         chrome.alarms.create(RETRY_ALARM_NAME, { when: retryTime });
 
-        Logger.log(`Scheduled retry #${newRetryCount} in 60 minutes. Time: ${new Date(retryTime).toISOString()}`);
+        Logger.log(`Scheduled retry #${newRetryCount} in 5 minutes. Time: ${new Date(retryTime).toISOString()}`);
     } else {
         Logger.log(`Maximum retry attempts (${MAX_RETRIES}) reached. No more retries will be scheduled.`);
         // Reset retry count after max attempts
@@ -570,7 +570,7 @@ const AlarmManager = {
     },
 
     setupWatchdogAlarm() {
-        chrome.alarms.create(WATCHDOG_ALARM_NAME, { periodInMinutes: 60 });
+        chrome.alarms.create(WATCHDOG_ALARM_NAME, { periodInMinutes: 5 });
     },
 
     initializeAlarmListeners() {
