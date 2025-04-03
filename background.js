@@ -509,7 +509,7 @@ async function runAutomationScript() {
 
         if (useDirect) {
             // New solution: use executeStepsDirect
-            chrome.tabs.create({ url: "https://www.linkedin.com/analytics/creator/content/?metricType=IMPRESSIONS&timeRange=past_4_weeks", active: false }, (tab) => {
+            chrome.tabs.create({ url: "https://www.linkedin.com/analytics/creator/content/?metricType=IMPRESSIONS&timeRange=past_28_days", active: false }, (tab) => {
                 LinkedInAutomation.executeStepsDirect(tab.id, email)
                     .catch(error => {
                         Logger.error(`Direct automation script failed: ${error.message}`);
