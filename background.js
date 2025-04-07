@@ -121,19 +121,22 @@ const WebRequestTracker = {
         return new Promise((resolve, reject) => {
             const listener = (details) => {
                 if (details.method === "GET" && details.url.includes(".xlsx")) {
-                    chrome.webRequest.onCompleted.removeListener(listener);
+                    //chrome.webRequest.onCompleted.removeListener(listener);
+                    chrome.webRequest.onBeforeRequest.removeListener(listener);
                     resolve(details.url);
                 }
             };
 
-            chrome.webRequest.onCompleted.addListener(
+            //chrome.webRequest.onCompleted.addListener(
+            chrome.webRequest.onBeforeRequest.addListener(
                 listener,
-                { urls: ["<all_urls>"] }
+                { urls: ["<all_urls>"] },
+                []
             );
 
             // Set a timeout to reject if no download is detected
             setTimeout(() => {
-                chrome.webRequest.onCompleted.removeListener(listener);
+                chrome.webRequest.onBeforeRequest.removeListener(listener);
                 reject(new AutomationError('No .xlsx download detected', {
                     tabId,
                     timeout
@@ -142,7 +145,6 @@ const WebRequestTracker = {
         });
     }
 };
-
 
 
 // Add this function to initialize the interval based on stored settings
@@ -268,6 +270,37 @@ const TabInteractions = {
         });
     },
 
+    clickLinkSoft(tabId, linkText) {
+    return new Promise((resolve) => {
+        chrome.scripting.executeScript({
+            target: { tabId },
+            func: (text) => {
+                const links = Array.from(document.querySelectorAll('a'));
+                const link = links.find((a) => a.textContent.includes(text));
+
+                if (link) {
+                    link.scrollIntoView({ behavior: "smooth", block: "center" });
+                    link.click();
+                    return true;
+                }
+                return false;
+            },
+            args: [linkText]
+        }, (results) => {
+            if (chrome.runtime.lastError) {
+                console.warn('Link click script error:', chrome.runtime.lastError);
+                resolve(); // Proceed silently
+            } else if (!results[0]?.result) {
+                console.info(`Link "${linkText}" not found, continuing...`);
+                resolve(); // Link not found, continue
+            } else {
+                // Wait a bit after clicking to allow for potential UI updates
+                setTimeout(resolve, 5000);
+            }
+        });
+    });
+  },
+
     selectListOption(tabId, forAttributeValue) {
         return new Promise((resolve, reject) => {
             chrome.scripting.executeScript({
@@ -369,16 +402,19 @@ const LinkedInAutomation = {
             // Navigate through LinkedIn analytics
             await TabInteractions.clickLink(tabId, 'Post impressions');
             await TabInteractions.waitForPageLoad(tabId);
-            await TabInteractions.clickLink(tabId, 'Post impressions');
+            // 3.4.2025 - LinkedIn removed this step for some accounts
+            await TabInteractions.clickLinkSoft(tabId, 'Post impressions');
             await TabInteractions.waitForPageLoad(tabId);
 
             // Configure time range
             await TabInteractions.clickButton(tabId, 'Past 7 days');
-            await TabInteractions.selectListOption(tabId, "timeRange-past_4_weeks");
+            // 3.4.2025 - LinkedIn renanmed this option
+            await TabInteractions.selectListOption(tabId, "timeRange-past_28_days");
             await TabInteractions.clickButton(tabId, 'Show results');
             await TabInteractions.waitForPageLoad(tabId);
 
             // Track and download file
+            const downloadTracker = WebRequestTracker.trackDownload(tabId);
             let buttonClicked = false;
             try {
                 await TabInteractions.clickButton(tabId, 'Export');
@@ -390,7 +426,6 @@ const LinkedInAutomation = {
             }
 
             // Get download URL and upload file
-            const downloadTracker = WebRequestTracker.trackDownload(tabId);
             const apiURL = await downloadTracker;
             await FileUploader.uploadToWebhook(apiURL, email);
 
