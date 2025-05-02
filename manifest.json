@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Professional Profile Analytics",
-  "version": "1.5.1",
+  "version": "1.6.0",
   "description": "Automates the download and upload of LinkedIn analytics data to the Professional Profile Analytics service",
   "permissions": [
     "storage",
@@ -16,6 +16,9 @@
     "https://www.linkedin.com/*",
     "https://*.lambda-url.us-east-1.on.aws/*"
   ],
+  "externally_connectable": {
+    "matches": ["https://dash.ppa.guide/*", "http://127.0.0.1:*/*"]
+  },
   "background": {
     "service_worker": "background.js"
   },

@@ -3,6 +3,9 @@
  *
  * This script handles the automated download and upload of LinkedIn analytics data
  * to the Professional Profile Analytics service.
+ * 
+ * It also provides an interface for the Shiny web app to trigger the extension
+ * to open tabs and simulate human typing.
  */
 
 // Force reset retry count on startup
@@ -1108,9 +1111,10 @@ const AlarmManager = {
         periodInMinutes: EXECUTION_INTERVAL / (60 * 1000)
       });
 
-      // Save next execution time
+      // Save next execution time and mark alarms as enabled
       chrome.storage.local.set({
-        nextExecution: nextExecution.toISOString()
+        nextExecution: nextExecution.toISOString(),
+        alarmsEnabled: true
       });
 
       Logger.log(`Alarm set. Next execution: ${nextExecution}`);
@@ -1124,6 +1128,10 @@ const AlarmManager = {
     // Run the watchdog more frequently (every 1 minute) to catch missed retries
     chrome.alarms.create(CONFIG.ALARMS.WATCHDOG, { periodInMinutes: 1 });
     Logger.log("Watchdog alarm set to run every minute");
+    
+    // Mark alarms as enabled
+    chrome.storage.local.set({ alarmsEnabled: true });
+    Logger.log("Alarms marked as enabled in storage");
 
     // Debug current alarms
     //chrome.alarms.getAll((alarms) => {
@@ -1289,13 +1297,24 @@ function setupRuntimeListeners() {
   });
 
   // Handle browser startup and extension installation
+  // Handle browser startup and extension installation
   chrome.runtime.onInstalled.addListener(() => {
+    // Explicitly set alarmsEnabled flag immediately on installation
+    chrome.storage.local.set({ alarmsEnabled: true }, () => {
+      Logger.log("alarmsEnabled flag set to true on installation");
+    });
+    
     AlarmManager.setupInitialAlarm();
     AlarmManager.setupWatchdogAlarm();
     AlarmManager.initializeAlarmListeners();
   });
 
   chrome.runtime.onStartup.addListener(() => {
+    // Explicitly set alarmsEnabled flag immediately on browser startup
+    chrome.storage.local.set({ alarmsEnabled: true }, () => {
+      Logger.log("alarmsEnabled flag set to true on browser startup");
+    });
+    
     AlarmManager.setupInitialAlarm();
     AlarmManager.setupWatchdogAlarm();
     AlarmManager.initializeAlarmListeners();
@@ -1320,7 +1339,191 @@ function setupRuntimeListeners() {
 async function initializeExtension() {
   await initializeExecutionInterval();
   setupRuntimeListeners();
+  
+  // Set up alarms and mark them as enabled
+  AlarmManager.setupInitialAlarm();
+  AlarmManager.setupWatchdogAlarm();
+  AlarmManager.initializeAlarmListeners();
+  
+  // Explicitly set alarmsEnabled flag
+  chrome.storage.local.set({ alarmsEnabled: true });
+  Logger.log("Extension initialized with alarms enabled");
 }
 
 // Initialize the extension
 initializeExtension();
+/**
+ * Professional Profile Analytics - Shiny App Integration
+ * 
+ * This script handles the integration with Shiny web applications,
+ * allowing them to trigger LinkedIn post creation with human-like typing.
+ */
+
+// ============================================================================
+// DEBUGGING UTILITIES
+// ============================================================================
+
+// Enable or disable verbose debugging
+const DEBUG_MODE = true;
+
+// Debug logging function
+function debugLog(message, data = null) {
+  if (!DEBUG_MODE) return;
+  
+  const timestamp = new Date().toISOString();
+  console.log(`[PPA-DEBUG ${timestamp}] ${message}`);
+  if (data) {
+    console.log('[PPA-DEBUG DATA]', data);
+  }
+}
+
+// ============================================================================
+// SHINY APP INTEGRATION
+// ============================================================================
+
+// Listen for messages from external web pages (Shiny app)
+chrome.runtime.onMessageExternal.addListener(
+  function(request, sender, sendResponse) {
+    debugLog("Message received from external source:", request);
+    debugLog("Sender:", sender);
+    
+    if (request.action === "openTabAndType") {
+      debugLog("Processing openTabAndType action");
+      
+      // Open a new tab with the specified URL
+      chrome.tabs.create({ url: request.url || "https://www.linkedin.com/feed/" }, function(tab) {
+        debugLog("Created new tab:", tab);
+        
+        // We need to wait for the tab to fully load before injecting our content script
+        chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo) {
+          debugLog(`Tab ${tabId} update:`, changeInfo);
+          
+          if (tabId === tab.id && changeInfo.status === 'complete') {
+            // Remove the listener to avoid multiple executions
+            chrome.tabs.onUpdated.removeListener(listener);
+            debugLog("Tab fully loaded, proceeding with script injection");
+            
+            // First inject the LinkedIn post helper script with human-like typing
+            chrome.scripting.executeScript({
+              target: { tabId: tab.id },
+              files: ['linkedin-post-helper-typing.js']
+            }, (injectionResults) => {
+              debugLog("Helper script injection results:", injectionResults);
+              
+              // Then execute the script to create a post
+              chrome.scripting.executeScript({
+                target: { tabId: tab.id },
+                function: createLinkedInPost,
+                args: [request.text, request.delay || 100, request.autoSubmit || false]
+              }, (results) => {
+                debugLog("Post creation script execution results:", results);
+                
+                // Send response back to the web page
+                if (results && results[0] && results[0].result && results[0].result.success) {
+                  debugLog("Sending success response to Shiny app");
+                  sendResponse({ 
+                    success: true, 
+                    message: "LinkedIn post created successfully" 
+                  });
+                } else {
+                  const errorMessage = results && results[0] && results[0].result ? 
+                    results[0].result.message : 
+                    "Failed to create LinkedIn post";
+                  
+                  debugLog("Sending error response to Shiny app:", errorMessage);
+                  sendResponse({ 
+                    success: false, 
+                    message: errorMessage
+                  });
+                }
+              });
+            });
+          }
+        });
+      });
+      
+      // Return true to indicate we will send a response asynchronously
+      return true;
+    }
+  }
+);
+
+// Function to be injected into the tab to create a LinkedIn post
+function createLinkedInPost(text, delay, autoSubmit) {
+  try {
+    // Check if the helper is available
+    if (!window.linkedInPostHelper) {
+      console.error("LinkedIn post helper not found");
+      return { success: false, message: "LinkedIn post helper not found" };
+    }
+    
+    // Use the debug logging function
+    window.linkedInPostHelper.debugLog("Starting LinkedIn post creation");
+    window.linkedInPostHelper.debugLog("Current URL:", window.location.href);
+    
+    // Use the LinkedIn post helper functions
+    return window.linkedInPostHelper.clickStartPostButton()
+      .then(editor => {
+        window.linkedInPostHelper.debugLog("Editor found, proceeding to type text");
+        return window.linkedInPostHelper.typeIntoEditor(editor, text, delay);
+      })
+      .then(() => {
+        window.linkedInPostHelper.debugLog("Text typed successfully");
+        
+        // If autoSubmit is true, find and click the Post button
+        if (autoSubmit) {
+          window.linkedInPostHelper.debugLog("Looking for Post button to auto-submit");
+          
+          // Find the Post button (multi-language support)
+          const postButtonSelectors = [
+            'button[aria-label="Post"]',
+            'button[aria-label="Posten"]',  // German
+            'button[aria-label="Publicar"]', // Spanish
+            'button[aria-label="Publier"]'   // French
+          ];
+          
+          let postButton = null;
+          for (const selector of postButtonSelectors) {
+            const buttons = document.querySelectorAll(selector);
+            for (const btn of buttons) {
+              if (btn.textContent.trim().match(/post|posten|publicar|publier/i)) {
+                postButton = btn;
+                break;
+              }
+            }
+            if (postButton) break;
+          }
+          
+          // If button not found by aria-label, try by text content
+          if (!postButton) {
+            const allButtons = document.querySelectorAll('button');
+            for (const btn of allButtons) {
+              const text = btn.textContent.trim().toLowerCase();
+              if (text === 'post' || text === 'posten' || text === 'publicar' || text === 'publier') {
+                postButton = btn;
+                break;
+              }
+            }
+          }
+          
+          if (postButton) {
+            window.linkedInPostHelper.debugLog("Post button found, clicking it");
+            postButton.click();
+            return { success: true, message: "Post created and submitted successfully" };
+          } else {
+            window.linkedInPostHelper.debugLog("Post button not found, post was typed but not submitted");
+            return { success: true, message: "Post created successfully but not submitted (Post button not found)" };
+          }
+        }
+        
+        return { success: true, message: "Post created successfully" };
+      })
+      .catch(error => {
+        window.linkedInPostHelper.debugLog("Error creating LinkedIn post:", error.message);
+        return { success: false, message: error.message };
+      });
+  } catch (error) {
+    console.error("Error in createLinkedInPost:", error);
+    return { success: false, message: error.message };
+  }
+}

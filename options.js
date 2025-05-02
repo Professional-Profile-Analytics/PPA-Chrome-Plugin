@@ -83,6 +83,11 @@ function updateNextExecutionDisplay(interval) {
 
 //
 document.getElementById('run-script').addEventListener('click', () => {
+  // Set alarmsEnabled to true when manually running the script
+  chrome.storage.local.set({ alarmsEnabled: true }, () => {
+    console.log("alarmsEnabled flag set to true when manually running script");
+  });
+  
   chrome.runtime.sendMessage({ action: 'executeScript' });
 });
 
@@ -138,6 +143,11 @@ document.addEventListener("DOMContentLoaded", () => {
 // alarm checker
 /////
 document.addEventListener("DOMContentLoaded", () => {
+    // Force set alarmsEnabled to true when options page is opened
+    chrome.storage.local.set({ alarmsEnabled: true }, () => {
+        console.log("alarmsEnabled flag set to true from options page");
+    });
+    
     chrome.storage.local.get("alarmsEnabled", (data) => {
         let message = data.alarmsEnabled
             ? "✅ Chrome Alarms and Scheduling are enabled!"
