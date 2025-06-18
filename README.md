@@ -168,6 +168,7 @@ If you encounter connection errors:
 
 ## Version History
 
+- 1.7.1: Redesigned options page with Bootstrap 5, added advanced post statistics toggle, improved UI/UX with modern card layout and consistent color scheme
 - 1.7.0: Added company page analytics automation with weekly scheduling
 - 1.6.0: Added Shiny integration with human-like typing simulation
 - 1.5.1: Improved retry mechanism and error handling
