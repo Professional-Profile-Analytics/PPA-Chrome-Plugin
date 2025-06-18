@@ -1011,6 +1011,9 @@ async function runAutomationScript() {
           // Clear retry flags
           chrome.storage.local.remove(['nextRetryTime', 'retryScheduled']);
           Logger.log(`=== AUTOMATION COMPLETED SUCCESSFULLY at ${new Date().toISOString()} ===`);
+          
+          // Check if company page upload is needed
+          await checkAndRunCompanyPageUpload();
         } catch (error) {
           Logger.error(`Direct automation script failed: ${error.message}`);
           await scheduleRetry();
@@ -1053,6 +1056,9 @@ async function runAutomationScript() {
           // Clear retry flags
           chrome.storage.local.remove(['nextRetryTime', 'retryScheduled']);
           Logger.log(`=== AUTOMATION COMPLETED SUCCESSFULLY at ${new Date().toISOString()} ===`);
+          
+          // Check if company page upload is needed
+          await checkAndRunCompanyPageUpload();
         } catch (error) {
           Logger.error(`Automation script failed: ${error.message}`);
           await scheduleRetry();
@@ -1071,6 +1077,787 @@ async function runAutomationScript() {
     await ConfigManager.updateExecutionStatus('Failed', error);
     await scheduleRetry();
   }
+}
+
+// ============================================================================
+// COMPANY PAGE AUTOMATION
+// ============================================================================
+
+// Global flag to prevent multiple company automations from running simultaneously
+let companyAutomationRunning = false;
+
+/**
+ * Check if company page upload is needed and run it if necessary
+ */
+async function checkAndRunCompanyPageUpload() {
+  try {
+    // Prevent multiple simultaneous executions
+    if (companyAutomationRunning) {
+      Logger.log('Company automation already running, skipping duplicate request');
+      return;
+    }
+    
+    Logger.log('Checking if company page upload is needed...');
+    
+    // Get company ID from storage
+    const result = await new Promise((resolve) => {
+      chrome.storage.local.get(['companyId', 'lastCompanyExecutionTime'], resolve);
+    });
+    
+    if (!result.companyId) {
+      Logger.log('No company ID configured, skipping company page upload');
+      return;
+    }
+    
+    const companyId = result.companyId;
+    const lastCompanyExecution = result.lastCompanyExecutionTime;
+    const now = Date.now();
+    const sevenDaysAgo = now - (7 * 24 * 60 * 60 * 1000); // 7 days in milliseconds
+    
+    // Check if last execution was more than 7 days ago or never executed
+    if (!lastCompanyExecution || lastCompanyExecution < sevenDaysAgo) {
+      Logger.log(`Company page upload needed. Last execution: ${lastCompanyExecution ? new Date(lastCompanyExecution).toISOString() : 'Never'}`);
+      await runCompanyPageAutomation(companyId);
+    } else {
+      Logger.log(`Company page upload not needed. Last execution: ${new Date(lastCompanyExecution).toISOString()}`);
+      // Update next execution time
+      const nextExecution = lastCompanyExecution + (7 * 24 * 60 * 60 * 1000);
+      chrome.storage.local.set({ nextCompanyExecution: nextExecution });
+    }
+  } catch (error) {
+    Logger.error(`Error checking company page upload: ${error.message}`);
+  }
+}
+
+/**
+ * Run the company page automation script
+ * @param {string} companyId - The LinkedIn company ID
+ */
+async function runCompanyPageAutomation(companyId) {
+  // Set the running flag
+  companyAutomationRunning = true;
+  
+  try {
+    Logger.log(`Starting company page automation for company ${companyId}`);
+    
+    // Update company execution status
+    const now = Date.now();
+    chrome.storage.local.set({
+      lastCompanyExecutionTime: now,
+      lastCompanyExecutionStatus: 'Running'
+    });
+    
+    // Get user email
+    const email = await ConfigManager.getEmail();
+    if (!email) {
+      throw new Error('User email not configured');
+    }
+    
+    // Create tab for company analytics page
+    const companyUrl = `https://www.linkedin.com/company/${companyId}/admin/analytics/updates/`;
+    
+    chrome.tabs.create({
+      url: companyUrl,
+      active: false
+    }, async (tab) => {
+      if (!tab || !tab.id) {
+        const error = new Error('Failed to create company analytics tab');
+        Logger.error(`Company tab creation failed: ${error.message}`);
+        await updateCompanyExecutionStatus('Failed', error);
+        companyAutomationRunning = false; // Reset flag
+        return;
+      }
+      
+      const tabId = tab.id;
+      Logger.log(`Created company analytics tab with ID: ${tabId}`);
+      
+      try {
+        await executeCompanyPageSteps(tabId, companyId, email);
+        
+        // Update success status
+        await updateCompanyExecutionStatus('Success');
+        
+        // Schedule next execution (7 days from now)
+        const nextExecution = now + (7 * 24 * 60 * 60 * 1000);
+        chrome.storage.local.set({ nextCompanyExecution: nextExecution });
+        
+        Logger.log(`Company page automation completed successfully`);
+      } catch (error) {
+        Logger.error(`Company page automation failed: ${error.message}`);
+        await updateCompanyExecutionStatus('Failed', error);
+        
+        // Close the tab if it still exists
+        try {
+          chrome.tabs.remove(tabId);
+        } catch (e) {
+          Logger.log(`Company tab ${tabId} already closed or doesn't exist`);
+        }
+      } finally {
+        // Always reset the running flag
+        companyAutomationRunning = false;
+      }
+    });
+  } catch (error) {
+    Logger.error(`Company page automation initialization failed: ${error.message}`);
+    await updateCompanyExecutionStatus('Failed', error);
+    companyAutomationRunning = false; // Reset flag
+  }
+}
+
+/**
+ * Execute the steps for company page analytics download
+ * @param {number} tabId - The tab ID
+ * @param {string} companyId - The company ID
+ * @param {string} email - User email
+ */
+async function executeCompanyPageSteps(tabId, companyId, email) {
+  return new Promise((resolve, reject) => {
+    let downloadStarted = false;
+    let downloadCompleted = false;
+    let exportPopupHandled = false;
+    let secondExportClicked = false;
+    const timeout = 120000; // 120 seconds timeout (increased for popup handling)
+    
+    // Set up download listener
+    const downloadListener = (downloadItem) => {
+      // Only log if it's a potential analytics file
+      if (downloadItem.filename && 
+          (downloadItem.filename.includes('analytics') || 
+           downloadItem.filename.includes('export') ||
+           downloadItem.filename.includes('company') ||
+           downloadItem.filename.toLowerCase().includes('.xlsx') ||
+           downloadItem.filename.toLowerCase().includes('.xls'))) {
+        
+        downloadStarted = true;
+        Logger.log(`Company analytics download started: ${downloadItem.filename.split('/').pop() || downloadItem.filename.split('\\').pop()}`);
+        
+        // Monitor download completion
+        const checkDownload = () => {
+          chrome.downloads.search({ id: downloadItem.id }, (results) => {
+            if (results.length > 0) {
+              const download = results[0];
+              
+              if (download.state === 'complete') {
+                downloadCompleted = true;
+                Logger.log(`Company analytics download completed successfully`);
+                
+                // Upload the file
+                uploadCompanyFile(download.filename, companyId, email)
+                  .then(() => {
+                    // Clean up - safely remove tab
+                    try {
+                      chrome.tabs.remove(tabId, () => {
+                        if (chrome.runtime.lastError) {
+                          // Tab already closed or doesn't exist - this is fine
+                          Logger.log(`Tab ${tabId} was already closed`);
+                        }
+                      });
+                    } catch (e) {
+                      // Ignore tab removal errors
+                      Logger.log(`Tab ${tabId} cleanup skipped - already closed`);
+                    }
+                    chrome.downloads.onCreated.removeListener(downloadListener);
+                    resolve();
+                  })
+                  .catch(reject);
+              } else if (download.state === 'interrupted') {
+                chrome.downloads.onCreated.removeListener(downloadListener);
+                reject(new Error(`Company analytics download failed: ${download.error}`));
+              } else {
+                // Still downloading, check again
+                setTimeout(checkDownload, 1000);
+              }
+            }
+          });
+        };
+        
+        setTimeout(checkDownload, 1000);
+      }
+    };
+    
+    chrome.downloads.onCreated.addListener(downloadListener);
+    
+    // Wait for page to load and then click first export button
+    chrome.tabs.onUpdated.addListener(function listener(updatedTabId, changeInfo) {
+      if (updatedTabId === tabId && changeInfo.status === 'complete') {
+        chrome.tabs.onUpdated.removeListener(listener);
+        
+        Logger.log('Company analytics page loaded, looking for first export button...');
+        
+        // Wait a bit for the page to fully render
+        setTimeout(() => {
+          // Inject script to find and click first export button
+          chrome.scripting.executeScript({
+            target: { tabId },
+            function: findAndClickCompanyExportButton
+          }, (results) => {
+            if (results && results[0] && results[0].result) {
+              Logger.log('First company export button clicked successfully');
+              
+              // Wait for popup/modal to appear and then handle the second export button
+              setTimeout(() => {
+                handleExportPopup(tabId);
+              }, 3000); // Increased wait time to 3 seconds for popup to appear
+              
+            } else {
+              chrome.downloads.onCreated.removeListener(downloadListener);
+              reject(new Error('Failed to find or click first company export button'));
+            }
+          });
+        }, 3000);
+      }
+    });
+    
+    // Function to handle the export popup/modal
+    const handleExportPopup = (tabId) => {
+      Logger.log('Looking for second export button in popup/modal...');
+      
+      chrome.scripting.executeScript({
+        target: { tabId },
+        function: findAndClickSecondExportButton
+      }, (results) => {
+        if (results && results[0] && results[0].result) {
+          Logger.log('Second company export button clicked successfully');
+          exportPopupHandled = true;
+          secondExportClicked = true;
+          
+          // Wait longer for download to start after second click (5 seconds)
+          setTimeout(() => {
+            if (!downloadStarted) {
+              Logger.log('Checking for recent company analytics downloads...');
+              
+              // Check for any recent downloads that might be the company file
+              checkForRecentDownloads(companyId, email)
+                .then(() => {
+                  chrome.downloads.onCreated.removeListener(downloadListener);
+                  // Safely remove tab
+                  try {
+                    chrome.tabs.remove(tabId, () => {
+                      if (chrome.runtime.lastError) {
+                        Logger.log(`Tab ${tabId} was already closed`);
+                      }
+                    });
+                  } catch (e) {
+                    Logger.log(`Tab ${tabId} cleanup skipped - already closed`);
+                  }
+                  resolve();
+                })
+                .catch(() => {
+                  Logger.log('No recent downloads found, trying alternative export methods...');
+                  // Try clicking again or look for alternative buttons
+                  chrome.scripting.executeScript({
+                    target: { tabId },
+                    function: findAndClickAlternativeExportButton
+                  }, (altResults) => {
+                    if (altResults && altResults[0] && altResults[0].result) {
+                      Logger.log('Alternative export button clicked');
+                      // Wait another 5 seconds for this attempt
+                      setTimeout(() => {
+                        if (!downloadStarted) {
+                          chrome.downloads.onCreated.removeListener(downloadListener);
+                          reject(new Error('Company analytics download did not start after multiple attempts'));
+                        }
+                      }, 5000);
+                    } else {
+                      chrome.downloads.onCreated.removeListener(downloadListener);
+                      reject(new Error('All export button attempts failed'));
+                    }
+                  });
+                });
+            }
+          }, 5000); // Wait 5 seconds after second export click
+          
+        } else {
+          Logger.log('Second export button not found, trying alternative approaches...');
+          
+          // Try alternative approaches for the popup
+          setTimeout(() => {
+            chrome.scripting.executeScript({
+              target: { tabId },
+              function: findAndClickAlternativeExportButton
+            }, (altResults) => {
+              if (altResults && altResults[0] && altResults[0].result) {
+                Logger.log('Alternative export button clicked successfully');
+                exportPopupHandled = true;
+                secondExportClicked = true;
+                
+                // Wait for download after alternative click
+                setTimeout(() => {
+                  if (!downloadStarted) {
+                    checkForRecentDownloads(companyId, email)
+                      .then(() => {
+                        chrome.downloads.onCreated.removeListener(downloadListener);
+                        chrome.tabs.remove(tabId);
+                        resolve();
+                      })
+                      .catch(() => {
+                        chrome.downloads.onCreated.removeListener(downloadListener);
+                        reject(new Error('Company analytics download did not start'));
+                      });
+                  }
+                }, 5000);
+              } else {
+                chrome.downloads.onCreated.removeListener(downloadListener);
+                reject(new Error('Failed to find second export button in popup'));
+              }
+            });
+          }, 2000);
+        }
+      });
+    };
+    
+    // Set timeout for the entire process
+    setTimeout(() => {
+      if (!downloadCompleted) {
+        Logger.log('Company automation timeout - checking for recent downloads...');
+        
+        if (secondExportClicked) {
+          // If we clicked the second export button, check for recent downloads
+          checkForRecentDownloads(companyId, email)
+            .then(() => {
+              chrome.downloads.onCreated.removeListener(downloadListener);
+              // Safely remove tab
+              try {
+                chrome.tabs.remove(tabId, () => {
+                  if (chrome.runtime.lastError) {
+                    Logger.log(`Tab ${tabId} was already closed`);
+                  }
+                });
+              } catch (e) {
+                Logger.log(`Tab ${tabId} cleanup skipped - already closed`);
+              }
+              resolve();
+            })
+            .catch(() => {
+              chrome.downloads.onCreated.removeListener(downloadListener);
+              // Safely remove tab
+              try {
+                chrome.tabs.remove(tabId, () => {
+                  if (chrome.runtime.lastError) {
+                    Logger.log(`Tab ${tabId} was already closed`);
+                  }
+                });
+              } catch (e) {
+                Logger.log(`Tab ${tabId} cleanup skipped - already closed`);
+              }
+              reject(new Error('Company page automation timed out - no download detected'));
+            });
+        } else {
+          chrome.downloads.onCreated.removeListener(downloadListener);
+          // Safely remove tab
+          try {
+            chrome.tabs.remove(tabId, () => {
+              if (chrome.runtime.lastError) {
+                Logger.log(`Tab ${tabId} was already closed`);
+              }
+            });
+          } catch (e) {
+            Logger.log(`Tab ${tabId} cleanup skipped - already closed`);
+          }
+          reject(new Error('Company page automation timed out'));
+        }
+      }
+    }, timeout);
+  });
+}
+
+/**
+ * Check for recent downloads that might be the company analytics file
+ * @param {string} companyId - The company ID
+ * @param {string} email - User email
+ * @returns {Promise} Promise that resolves if a recent download is found and uploaded
+ */
+async function checkForRecentDownloads(companyId, email) {
+  return new Promise((resolve, reject) => {
+    // Look for downloads from the last 30 seconds
+    const thirtySecondsAgo = Date.now() - 30000;
+    
+    chrome.downloads.search({
+      orderBy: ['-startTime'],
+      limit: 10
+    }, async (downloads) => {
+      
+      for (const download of downloads) {
+        // Check if download started recently and looks like analytics data
+        if (download.startTime && new Date(download.startTime).getTime() > thirtySecondsAgo) {
+          
+          // Check if filename suggests it's analytics data (xls/xlsx format)
+          if (download.filename && 
+              (download.filename.includes('analytics') || 
+               download.filename.includes('export') ||
+               download.filename.includes('company') ||
+               download.filename.toLowerCase().includes('.xlsx') ||
+               download.filename.toLowerCase().includes('.xls'))) {
+            
+            Logger.log(`Found recent company analytics file`);
+            
+            if (download.state === 'complete') {
+              try {
+                await uploadCompanyFile(download.filename, companyId, email);
+                resolve();
+                return;
+              } catch (error) {
+                Logger.error(`Failed to upload recent download: ${error.message}`);
+              }
+            } else if (download.state === 'in_progress') {
+              // Wait for it to complete
+              Logger.log('Download in progress, waiting for completion...');
+              const waitForCompletion = () => {
+                chrome.downloads.search({ id: download.id }, async (results) => {
+                  if (results.length > 0 && results[0].state === 'complete') {
+                    try {
+                      await uploadCompanyFile(results[0].filename, companyId, email);
+                      resolve();
+                    } catch (error) {
+                      reject(error);
+                    }
+                  } else if (results.length > 0 && results[0].state === 'interrupted') {
+                    reject(new Error('Recent download was interrupted'));
+                  } else {
+                    setTimeout(waitForCompletion, 1000);
+                  }
+                });
+              };
+              waitForCompletion();
+              return;
+            }
+          }
+        }
+      }
+      
+      reject(new Error('No recent company analytics downloads found'));
+    });
+  });
+}
+
+/**
+ * Function to be injected into the company analytics page to find and click export button
+ */
+function findAndClickCompanyExportButton() {
+  // Multi-language export button selectors
+  const exportTexts = [
+    'Export',      // English
+    'Exportieren', // German
+    'Exportar',    // Spanish
+    'Exporter'     // French
+  ];
+  
+  // Try different selectors
+  const selectors = [
+    'button',
+    '[role="button"]',
+    '.artdeco-button',
+    'a'
+  ];
+  
+  for (const selector of selectors) {
+    const elements = document.querySelectorAll(selector);
+    for (const element of elements) {
+      const text = element.textContent?.trim();
+      if (text && exportTexts.some(exportText => 
+        text.toLowerCase().includes(exportText.toLowerCase())
+      )) {
+        console.log(`Found company export button with text: ${text}`);
+        element.click();
+        return true;
+      }
+    }
+  }
+  
+  console.log('Company export button not found');
+  return false;
+}
+
+/**
+ * Function to be injected to find and click the second export button in popup/modal
+ */
+function findAndClickSecondExportButton() {
+  console.log('Looking for second export button in popup/modal...');
+  
+  // Multi-language export button texts
+  const exportTexts = [
+    'Export',      // English
+    'Exportieren', // German
+    'Exportar',    // Spanish
+    'Exporter'     // French
+  ];
+  
+  // Look for modal/popup containers first
+  const modalSelectors = [
+    '[role="dialog"]',
+    '.modal',
+    '.popup',
+    '.overlay',
+    '[data-test-modal]',
+    '.artdeco-modal',
+    '.artdeco-dropdown-content'
+  ];
+  
+  // First try to find buttons within modal containers
+  for (const modalSelector of modalSelectors) {
+    const modals = document.querySelectorAll(modalSelector);
+    for (const modal of modals) {
+      if (modal.offsetParent !== null) { // Check if modal is visible
+        console.log(`Found visible modal: ${modalSelector}`);
+        
+        const buttons = modal.querySelectorAll('button, [role="button"], .artdeco-button, a');
+        for (const button of buttons) {
+          const text = button.textContent?.trim();
+          if (text && exportTexts.some(exportText => 
+            text.toLowerCase().includes(exportText.toLowerCase())
+          )) {
+            console.log(`Found second export button in modal with text: ${text}`);
+            button.click();
+            return true;
+          }
+        }
+      }
+    }
+  }
+  
+  // If no modal found, look for any visible export buttons that might have appeared
+  const allButtons = document.querySelectorAll('button, [role="button"], .artdeco-button, a');
+  for (const button of allButtons) {
+    if (button.offsetParent !== null) { // Check if button is visible
+      const text = button.textContent?.trim();
+      if (text && exportTexts.some(exportText => 
+        text.toLowerCase().includes(exportText.toLowerCase())
+      )) {
+        // Make sure this is not the same button we clicked before
+        const rect = button.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          console.log(`Found visible second export button with text: ${text}`);
+          button.click();
+          return true;
+        }
+      }
+    }
+  }
+  
+  console.log('Second export button not found in popup/modal');
+  return false;
+}
+
+/**
+ * Function to be injected to find alternative export buttons or download options
+ */
+function findAndClickAlternativeExportButton() {
+  console.log('Looking for alternative export/download buttons...');
+  
+  // Alternative texts that might appear
+  const alternativeTexts = [
+    'Download',
+    'Save',
+    'Excel',
+    'XLSX',
+    'XLS',
+    'Herunterladen', // German
+    'Descargar',     // Spanish
+    'Télécharger',   // French
+    'Guardar',       // Spanish Save
+    'Enregistrer'    // French Save
+  ];
+  
+  // Look for any clickable elements with alternative texts
+  const clickableElements = document.querySelectorAll('button, [role="button"], .artdeco-button, a, span[role="button"]');
+  
+  for (const element of clickableElements) {
+    if (element.offsetParent !== null) { // Check if element is visible
+      const text = element.textContent?.trim();
+      const ariaLabel = element.getAttribute('aria-label');
+      const title = element.getAttribute('title');
+      
+      // Check text content, aria-label, and title
+      const textToCheck = [text, ariaLabel, title].filter(Boolean).join(' ').toLowerCase();
+      
+      if (alternativeTexts.some(altText => 
+        textToCheck.includes(altText.toLowerCase())
+      )) {
+        console.log(`Found alternative export button with text: ${text || ariaLabel || title}`);
+        element.click();
+        return true;
+      }
+    }
+  }
+  
+  // Last resort: look for any button that might trigger a download
+  const downloadLinks = document.querySelectorAll('a[download], a[href*="download"], a[href*="export"]');
+  for (const link of downloadLinks) {
+    if (link.offsetParent !== null) {
+      console.log(`Found download link: ${link.href}`);
+      link.click();
+      return true;
+    }
+  }
+  
+  console.log('No alternative export buttons found');
+  return false;
+}
+
+/**
+ * Upload company analytics file to the API
+ * @param {string} filename - The downloaded file name
+ * @param {string} companyId - The company ID
+ * @param {string} email - User email
+ */
+async function uploadCompanyFile(filename, companyId, email) {
+  return new Promise((resolve, reject) => {
+    // Search for the downloaded file
+    chrome.downloads.search({ 
+      filename: filename,
+      orderBy: ['-startTime'],
+      limit: 1
+    }, async (downloads) => {
+      if (downloads.length === 0) {
+        reject(new Error('Company analytics file not found'));
+        return;
+      }
+      
+      const download = downloads[0];
+      Logger.log(`Found company analytics file: ${download.filename}`);
+      
+      try {
+        // Get the download URL - LinkedIn provides direct download URLs
+        const downloadUrl = download.url;
+        
+        if (!downloadUrl) {
+          reject(new Error('Download URL not available'));
+          return;
+        }
+        
+        Logger.log(`Fetching company file from URL: ${downloadUrl}`);
+        
+        // Fetch the file content
+        const response = await fetch(downloadUrl);
+        
+        if (!response.ok) {
+          reject(new Error(`Failed to fetch company file: ${response.status}`));
+          return;
+        }
+        
+        // Get the file as blob
+        const fileBlob = await response.blob();
+        
+        // Convert to base64
+        const reader = new FileReader();
+        reader.onload = async function() {
+          try {
+            const base64Data = reader.result.split(',')[1]; // Remove data:... prefix
+            
+            // Validate required parameters
+            if (!companyId) {
+              reject(new Error('Company ID is missing or empty'));
+              return;
+            }
+            
+            if (!email) {
+              reject(new Error('User email is missing or empty'));
+              return;
+            }
+            
+            if (!base64Data) {
+              reject(new Error('File data is missing or empty'));
+              return;
+            }
+            
+            // Extract just the filename from the full path (handle both Windows and Unix paths)
+            let justFilename = download.filename;
+            
+            // Debug: Log the original filename
+            console.log(`[DEBUG] Original filename: "${download.filename}"`);
+            
+            // Handle Windows paths (C:\Users\...)
+            if (justFilename.includes('\\')) {
+              justFilename = justFilename.split('\\').pop();
+              console.log(`[DEBUG] After Windows split: "${justFilename}"`);
+            }
+            
+            // Handle Unix paths (/home/user/...)
+            if (justFilename.includes('/')) {
+              justFilename = justFilename.split('/').pop();
+              console.log(`[DEBUG] After Unix split: "${justFilename}"`);
+            }
+            
+            // Fallback if extraction failed
+            if (!justFilename || justFilename === download.filename) {
+              // Try to extract from the end of the path using regex
+              const match = download.filename.match(/[^\\\/]+$/);
+              justFilename = match ? match[0] : 'company_analytics.xls';
+              console.log(`[DEBUG] After regex fallback: "${justFilename}"`);
+            }
+            
+            console.log(`[DEBUG] Final filename: "${justFilename}"`);
+            
+            // Prepare the payload for the company API
+            const payload = {
+              company_id: String(companyId), // Ensure it's a string
+              user_email: String(email),     // Ensure it's a string
+              file: base64Data,
+              file_name: justFilename
+            };
+            
+            Logger.log(`Uploading company analytics file for company ${companyId}`);
+            
+            // Upload to company API endpoint
+            const uploadResponse = await fetch('https://sn6ujdpryv35cap42dqlgmyybe0wsxso.lambda-url.us-east-1.on.aws/', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(payload)
+            });
+            
+            if (uploadResponse.ok) {
+              const responseData = await uploadResponse.json();
+              Logger.log('Company analytics file uploaded successfully');
+              resolve(responseData);
+            } else {
+              const errorText = await uploadResponse.text();
+              Logger.error(`Company file upload failed: ${uploadResponse.status} - ${errorText}`);
+              reject(new Error(`Company file upload failed: ${uploadResponse.status} - ${errorText}`));
+            }
+          } catch (error) {
+            reject(new Error(`Company file processing error: ${error.message}`));
+          }
+        };
+        
+        reader.onerror = () => {
+          reject(new Error('Failed to read company analytics file'));
+        };
+        
+        reader.readAsDataURL(fileBlob);
+        
+      } catch (error) {
+        reject(new Error(`Error processing company analytics file: ${error.message}`));
+      }
+    });
+  });
+}
+
+/**
+ * Update company execution status in storage
+ * @param {string} status - The execution status
+ * @param {Error} error - Optional error object
+ */
+async function updateCompanyExecutionStatus(status, error = null) {
+  const updateData = {
+    lastCompanyExecutionStatus: status,
+    lastCompanyExecutionTime: Date.now()
+  };
+  
+  if (error) {
+    updateData.lastCompanyExecutionError = JSON.stringify({
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    });
+  } else {
+    // Clear previous error if successful
+    chrome.storage.local.remove(['lastCompanyExecutionError']);
+  }
+  
+  chrome.storage.local.set(updateData);
+  Logger.log(`Company execution status updated: ${status}`);
 }
 
 // ============================================================================
@@ -1273,6 +2060,16 @@ function setupRuntimeListeners() {
 
       Logger.log(`Manual execution triggered. Next execution: ${nextExecution}`);
       runAutomationScript();
+    }
+    else if (message.action === 'executeCompanyScript') {
+      // Check if company automation is already running
+      if (companyAutomationRunning) {
+        Logger.log('Company automation already running, ignoring manual request');
+        return;
+      }
+      
+      Logger.log(`Manual company execution triggered for company ID: ${message.companyId}`);
+      runCompanyPageAutomation(message.companyId);
     }
     else if (message.action === 'updateInterval') {
       // Update the execution interval

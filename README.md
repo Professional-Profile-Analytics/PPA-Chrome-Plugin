@@ -168,6 +168,7 @@ If you encounter connection errors:
 
 ## Version History
 
+- 1.7.0: Added company page analytics automation with weekly scheduling
 - 1.6.0: Added Shiny integration with human-like typing simulation
 - 1.5.1: Improved retry mechanism and error handling
 - 1.5.0: Added multi-language support

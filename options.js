@@ -12,10 +12,40 @@ document.addEventListener("DOMContentLoaded", function () {
     if (email) {
       // Save the email to chrome storage
       chrome.storage.local.set({ email: email }, function () {
-        alert("Email saved!");
+        showStatusMessage("emailStatus", "Email saved successfully!", "success");
       });
     } else {
-      alert("Please enter a valid email address.");
+      showStatusMessage("emailStatus", "Please enter a valid email address.", "error");
+    }
+  });
+
+  // Get the company ID from storage and set it in the input field if it's available
+  chrome.storage.local.get("companyId", function (data) {
+    if (data.companyId) {
+      document.getElementById("companyId").value = data.companyId;
+    }
+  });
+
+  // Save the company ID when the user clicks the "Save Company ID" button
+  document.getElementById("save-company-id").addEventListener("click", function () {
+    const companyId = document.getElementById("companyId").value.trim();
+    
+    // Validate company ID (should be numeric)
+    if (companyId && /^\d+$/.test(companyId)) {
+      // Save the company ID to chrome storage
+      chrome.storage.local.set({ companyId: companyId }, function () {
+        showStatusMessage("companyIdStatus", "Company ID saved successfully!", "success");
+        // Update company execution displays
+        updateCompanyExecutionDisplays();
+      });
+    } else if (companyId === "") {
+      // Allow clearing the company ID
+      chrome.storage.local.remove("companyId", function () {
+        showStatusMessage("companyIdStatus", "Company ID cleared.", "success");
+        updateCompanyExecutionDisplays();
+      });
+    } else {
+      showStatusMessage("companyIdStatus", "Please enter a valid numeric Company ID.", "error");
     }
   });
 
@@ -51,18 +81,25 @@ document.addEventListener("DOMContentLoaded", function () {
        updateNextExecutionDisplay(interval);
 
        // Show status message
-       const statusElement = document.getElementById('frequencyStatus');
-       statusElement.textContent = 'Frequency saved!';
-       statusElement.style.color = 'green';
-
-       // Clear status message after 3 seconds
-       setTimeout(() => {
-         statusElement.textContent = '';
-       }, 3000);
+       showStatusMessage("frequencyStatus", "Frequency saved successfully!", "success");
      });
    });
 
 });
+
+// Function to show status messages with proper styling
+function showStatusMessage(elementId, message, type) {
+  const statusElement = document.getElementById(elementId);
+  statusElement.textContent = message;
+  statusElement.className = `status-message ${type}`;
+  statusElement.style.display = 'block';
+
+  // Clear status message after 5 seconds
+  setTimeout(() => {
+    statusElement.textContent = '';
+    statusElement.style.display = 'none';
+  }, 5000);
+}
 
 // Function to update the next execution display
 function updateNextExecutionDisplay(interval) {
@@ -89,6 +126,31 @@ document.getElementById('run-script').addEventListener('click', () => {
   });
   
   chrome.runtime.sendMessage({ action: 'executeScript' });
+});
+
+// Manual company script execution
+document.getElementById('run-company-script').addEventListener('click', () => {
+  // Check if company ID is configured
+  chrome.storage.local.get("companyId", function (data) {
+    if (!data.companyId) {
+      showStatusMessage("companyIdStatus", "Please configure Company ID first before running company analytics.", "error");
+      return;
+    }
+    
+    // Set alarmsEnabled to true when manually running the script
+    chrome.storage.local.set({ alarmsEnabled: true }, () => {
+      console.log("alarmsEnabled flag set to true when manually running company script");
+    });
+    
+    // TODO: Send message to background script to execute company analytics
+    chrome.runtime.sendMessage({ 
+      action: 'executeCompanyScript',
+      companyId: data.companyId 
+    });
+    
+    // Show feedback to user
+    showStatusMessage("companyIdStatus", "Company analytics download initiated...", "success");
+  });
 });
 
 
@@ -134,7 +196,60 @@ document.addEventListener("DOMContentLoaded", () => {
         lastExecutionElement.textContent = "No execution has run yet.";
     }
 });
+
+    // Load and display company execution information
+    updateCompanyExecutionDisplays();
 });
+
+// Function to update company execution displays
+function updateCompanyExecutionDisplays() {
+    const nextCompanyExecutionElement = document.getElementById("nextCompanyExecution");
+    const lastCompanyExecutionElement = document.getElementById("lastCompanyExecution");
+
+    chrome.storage.local.get([
+        "companyId", 
+        "nextCompanyExecution", 
+        "lastCompanyExecutionTime", 
+        "lastCompanyExecutionStatus", 
+        "lastCompanyExecutionError"
+    ], (data) => {
+        if (!data.companyId) {
+            nextCompanyExecutionElement.textContent = "Company ID not configured. Company uploads disabled.";
+            lastCompanyExecutionElement.textContent = "Configure Company ID to enable company analytics.";
+            return;
+        }
+
+        // Show next company execution time
+        if (data.nextCompanyExecution) {
+            const nextExecution = new Date(data.nextCompanyExecution);
+            nextCompanyExecutionElement.textContent = `Next company upload: ${nextExecution.toLocaleString()}`;
+        } else {
+            // Calculate next execution (weekly from now)
+            const nextWeek = new Date();
+            nextWeek.setDate(nextWeek.getDate() + 7);
+            nextCompanyExecutionElement.textContent = `Next company upload: ${nextWeek.toLocaleString()} (estimated)`;
+        }
+
+        // Show last company execution time and status
+        if (data.lastCompanyExecutionTime) {
+            const lastExecutionTime = new Date(data.lastCompanyExecutionTime);
+            let statusMessage = `Last company upload: ${lastExecutionTime.toLocaleString()} - Status: ${data.lastCompanyExecutionStatus || 'Unknown'}`;
+
+            if (data.lastCompanyExecutionError) {
+                try {
+                    const errorDetails = JSON.parse(data.lastCompanyExecutionError);
+                    statusMessage += `<br>Error: ${errorDetails.message}`;
+                } catch (parseError) {
+                    statusMessage += `<br>Error: ${data.lastCompanyExecutionError}`;
+                }
+            }
+
+            lastCompanyExecutionElement.innerHTML = statusMessage;
+        } else {
+            lastCompanyExecutionElement.textContent = "No company upload has run yet.";
+        }
+    });
+}
 
 
 

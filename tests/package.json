@@ -1,0 +1,29 @@
+{
+  "name": "ppa-chrome-extension-tests",
+  "version": "1.0.0",
+  "description": "Test suite for Professional Profile Analytics Chrome Extension",
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:config": "jest --testPathPattern=config"
+  },
+  "devDependencies": {
+    "jest": "^27.5.1",
+    "jest-chrome": "^0.8.0",
+    "@types/chrome": "^0.0.246",
+    "sinon": "^15.2.0",
+    "jest-environment-jsdom": "^27.5.1"
+  },
+  "jest": {
+    "testEnvironment": "jsdom",
+    "setupFilesAfterEnv": ["<rootDir>/setup/jest.setup.js"],
+    "collectCoverageFrom": [
+      "../*.js",
+      "!../node_modules/**",
+      "!**/coverage/**"
+    ],
+    "coverageDirectory": "./coverage",
+    "coverageReporters": ["text", "lcov", "html"]
+  }
+}

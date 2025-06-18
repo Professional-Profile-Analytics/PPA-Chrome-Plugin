@@ -43,8 +43,55 @@
     </div>
 
     <div class="section" style="margin-top:40px;">
+      <h2>Company Page Analytics</h2>
+      <p class="description">
+        Configure automatic download and upload of LinkedIn company page analytics data. 
+        Company page data is automatically uploaded once per week.
+      </p>
+      
+      <div class="form-group">
+        <label for="companyId">LinkedIn Company ID:</label>
+        <input type="text" id="companyId" placeholder="e.g., 105563936" maxlength="20">
+        <button id="save-company-id">Save Company ID</button>
+      </div>
+      <div id="companyIdStatus" class="status-message"></div>
+      
+      <div class="help-section">
+        <h3>How to find your Company ID:</h3>
+        <p class="help-text">
+          1. Go to your LinkedIn company page admin panel<br>
+          2. Navigate to Analytics → Updates<br>
+          3. Look at the URL: <code>https://www.linkedin.com/company/[COMPANY-ID]/admin/analytics/updates/</code><br>
+          4. Copy the number between "company/" and "/admin" (e.g., <strong>105563936</strong>)
+        </p>
+        <p class="example">
+          <strong>Example URL:</strong> https://www.linkedin.com/company/105563936/admin/analytics/updates/<br>
+          <strong>Company ID:</strong> 105563936
+        </p>
+      </div>
+
+      <div class="company-status" style="margin-top: 20px;">
+        <h3>Company Page Upload Status</h3>
+        <p id="nextCompanyExecution">Loading next company upload...</p>
+        <p id="lastCompanyExecution">Checking last company upload...</p>
+      </div>
+    </div>
+
+    <div class="section" style="margin-top:40px;">
       <h2>Manual Actions</h2>
-      <button id="run-script">Download and Upload 28 Days of LinkedIn Analytics Data NOW</button>
+      <div class="manual-actions-grid">
+        <div class="action-item">
+          <h3>Personal Profile Analytics</h3>
+          <button id="run-script">Download and Upload 28 Days of LinkedIn Analytics Data NOW</button>
+          <p class="action-note">Note: Email must be configured above</p>
+        </div>
+        
+        <div class="action-item">
+          <h3>Company Page Analytics</h3>
+          <button id="run-company-script">Download and Upload Company Page Analytics Data NOW</button>
+          <p class="action-note">Note: Company ID must be configured above</p>
+        </div>
+      </div>
     </div>
 
 
