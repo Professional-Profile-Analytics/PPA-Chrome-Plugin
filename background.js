@@ -553,22 +553,48 @@ const LinkedInMultilingualAutomation = {
     try {
       logger.log('Starting advanced post statistics processing...');
       
+      // Wait a moment for downloads to be fully registered
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
       // Get the most recent download (should be the main analytics file)
       const recentDownloads = await new Promise((resolve) => {
         chrome.downloads.search({ 
-          limit: 5,
+          limit: 10, // Increased from 5 to catch more files
           orderBy: ['-startTime']
         }, resolve);
       });
       
-      const mainAnalyticsFile = recentDownloads.find(download => 
-        download.filename.toLowerCase().includes('analytics') && 
-        download.filename.endsWith('.xlsx') &&
-        download.state === 'complete'
-      );
+      // Debug: Log all recent downloads
+      logger.log('Recent downloads found:');
+      recentDownloads.forEach((download, index) => {
+        logger.log(`  ${index + 1}. ${download.filename} (state: ${download.state}, id: ${download.id})`);
+      });
+      
+      // Look for the main analytics file with broader criteria
+      const mainAnalyticsFile = recentDownloads.find(download => {
+        const filename = download.filename.toLowerCase();
+        const isExcel = download.filename.endsWith('.xlsx');
+        const isComplete = download.state === 'complete';
+        
+        // Check various patterns that LinkedIn analytics files might have
+        const hasAnalyticsPattern = (
+          filename.includes('analytics') || 
+          filename.includes('content') ||
+          filename.includes('linkedin') ||
+          download.filename.includes('Dr.') || // Common pattern in LinkedIn exports
+          download.filename.match(/\d{4}-\d{2}-\d{2}.*\d{4}-\d{2}-\d{2}/) || // Date range pattern
+          filename.includes('post') ||
+          filename.includes('activity')
+        );
+        
+        logger.log(`  Checking ${download.filename}: excel=${isExcel}, complete=${isComplete}, pattern=${hasAnalyticsPattern}`);
+        
+        return hasAnalyticsPattern && isExcel && isComplete;
+      });
       
       if (!mainAnalyticsFile) {
         logger.warn('Main analytics file not found in recent downloads, skipping advanced statistics');
+        logger.log('If you just downloaded a LinkedIn analytics file, it might not be detected. Please check the filename patterns.');
         return;
       }
       
