@@ -261,33 +261,18 @@ class AdvancedPostAnalytics {
     try {
       logger.log(`Uploading single post analytics: ${downloadInfo.filename}`);
       
-      // Prepare the metadata for this single post
-      const metadata = {
-        email: email,
-        timestamp: new Date().toISOString(),
-        postCount: 1,
-        post: {
-          originalUrl: originalUrl,
-          analyticsUrl: analyticsUrl,
-          downloadFilename: downloadInfo.filename,
-          downloadId: downloadInfo.id
-        }
-      };
-      
-      // Create FormData for this single file upload
-      const formData = new FormData();
-      formData.append('Email', email);
-      formData.append('metadata', JSON.stringify(metadata));
-      
-      // Add the downloaded file to the form data
+      // Get the file from the download URL
+      let fileBase64 = null;
       try {
-        // Get the file from the download URL if available
         if (downloadInfo.url) {
           const response = await fetch(downloadInfo.url);
           if (response.ok) {
             const fileBlob = await response.blob();
-            formData.append('post_analytics', fileBlob, downloadInfo.filename);
-            logger.log(`Added file ${downloadInfo.filename} to upload`);
+            // Convert blob to base64
+            const arrayBuffer = await fileBlob.arrayBuffer();
+            const uint8Array = new Uint8Array(arrayBuffer);
+            fileBase64 = btoa(String.fromCharCode.apply(null, uint8Array));
+            logger.log(`Converted file ${downloadInfo.filename} to base64 (${fileBase64.length} chars)`);
           } else {
             throw new Error(`Could not fetch file from URL: ${response.status}`);
           }
@@ -295,15 +280,24 @@ class AdvancedPostAnalytics {
           throw new Error('Download URL not available');
         }
       } catch (fileError) {
-        logger.warn(`Failed to add file ${downloadInfo.filename}: ${fileError.message}`);
+        logger.warn(`Failed to get file ${downloadInfo.filename}: ${fileError.message}`);
         return { success: false, error: fileError.message };
       }
       
-      // Upload to API
+      // Prepare the simple JSON payload as expected by Python Lambda
+      const payload = {
+        user_email: email,
+        file: fileBase64
+      };
+      
+      // Upload to API with JSON payload
       logger.log(`Uploading to endpoint: ${API_ENDPOINT}`);
       const response = await fetch(API_ENDPOINT, {
         method: 'POST',
-        body: formData
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
       });
       
       if (!response.ok) {
