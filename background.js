@@ -592,18 +592,16 @@ const LinkedInMultilingualAutomation = {
         logger
       );
       
-      // Upload advanced statistics if any were successfully processed
+      // Results now include individual upload status for each post
+      logger.log(`Advanced post statistics processing completed. Processed: ${results.processed}, Successful: ${results.successful}, Failed: ${results.failed}`);
+      
       if (results.successful > 0) {
-        await AdvancedPostAnalytics.uploadAdvancedStatistics(
-          email, 
-          results.downloads, 
-          logger
-        );
-      } else {
-        logger.log('No posts were successfully processed, skipping upload');
+        logger.log(`Successfully uploaded ${results.successful} individual post analytics files`);
       }
       
-      logger.log(`Advanced post statistics processing completed. Processed: ${results.processed}, Successful: ${results.successful}, Failed: ${results.failed}`);
+      if (results.failed > 0) {
+        logger.warn(`Failed to process ${results.failed} posts. Check logs for details.`);
+      }
       
     } catch (error) {
       logger.error(`Advanced post statistics processing failed: ${error.message}`);
@@ -2527,7 +2525,7 @@ const AdvancedPostAnalytics = {
       processed: 0,
       successful: 0,
       failed: 0,
-      downloads: [],
+      uploads: [],
       errors: []
     };
     
@@ -2551,12 +2549,38 @@ const AdvancedPostAnalytics = {
           const downloadInfo = await this.exportPostAnalytics(tabId, logger);
           
           if (downloadInfo) {
-            results.downloads.push({
+            // Upload immediately after download
+            logger.log(`Uploading analytics for post: ${postUrl}`);
+            const uploadResult = await this.uploadSinglePostAnalytics(
+              email, 
+              postUrl, 
+              analyticsUrl, 
+              downloadInfo, 
+              logger
+            );
+            
+            if (uploadResult.success) {
+              results.uploads.push({
+                postUrl: postUrl,
+                analyticsUrl: analyticsUrl,
+                downloadInfo: downloadInfo,
+                uploadResult: uploadResult
+              });
+              results.successful++;
+              logger.log(`Successfully uploaded analytics for post: ${postUrl}`);
+            } else {
+              results.errors.push({
+                postUrl: postUrl,
+                error: `Upload failed: ${uploadResult.error}`
+              });
+              results.failed++;
+            }
+          } else {
+            results.errors.push({
               postUrl: postUrl,
-              analyticsUrl: analyticsUrl,
-              downloadInfo: downloadInfo
+              error: 'Download failed'
             });
-            results.successful++;
+            results.failed++;
           }
           
           results.processed++;
@@ -2576,7 +2600,7 @@ const AdvancedPostAnalytics = {
         }
       }
       
-      logger.log(`Advanced post statistics processing completed. Successful: ${results.successful}, Failed: ${results.failed}`);
+      logger.log(`Advanced post statistics processing completed. Processed: ${results.processed}, Successful: ${results.successful}, Failed: ${results.failed}`);
       return results;
       
     } catch (error) {
@@ -2757,55 +2781,56 @@ const AdvancedPostAnalytics = {
   },
 
   /**
-   * Upload advanced post statistics to API
+   * Upload single post analytics to API immediately after download
    * @param {string} email - User email
-   * @param {Array} downloadInfos - Array of download information
+   * @param {string} originalUrl - Original post URL
+   * @param {string} analyticsUrl - Analytics URL
+   * @param {Object} downloadInfo - Download information
    * @param {Object} logger - Logger instance
    * @returns {Promise<Object>} Upload result
    */
-  async uploadAdvancedStatistics(email, downloadInfos, logger) {
+  async uploadSinglePostAnalytics(email, originalUrl, analyticsUrl, downloadInfo, logger) {
     const API_ENDPOINT = 'https://mlew54d2u3dfar47trgs2rjjgi0vfopc.lambda-url.us-east-1.on.aws/';
     
-    logger.log(`Uploading advanced post statistics for ${downloadInfos.length} posts`);
-    
     try {
-      // Prepare the data for upload
-      const uploadData = {
+      logger.log(`Uploading single post analytics: ${downloadInfo.filename}`);
+      
+      // Prepare the metadata for this single post
+      const metadata = {
         email: email,
         timestamp: new Date().toISOString(),
-        postCount: downloadInfos.length,
-        posts: downloadInfos.map(info => ({
-          originalUrl: info.postUrl,
-          analyticsUrl: info.analyticsUrl,
-          downloadFilename: info.downloadInfo.filename,
-          downloadId: info.downloadInfo.id
-        }))
+        postCount: 1,
+        post: {
+          originalUrl: originalUrl,
+          analyticsUrl: analyticsUrl,
+          downloadFilename: downloadInfo.filename,
+          downloadId: downloadInfo.id
+        }
       };
       
-      // Create FormData for file uploads
+      // Create FormData for this single file upload
       const formData = new FormData();
       formData.append('Email', email);
-      formData.append('metadata', JSON.stringify(uploadData));
+      formData.append('metadata', JSON.stringify(metadata));
       
-      // Add each downloaded file to the form data
-      for (let i = 0; i < downloadInfos.length; i++) {
-        const downloadInfo = downloadInfos[i].downloadInfo;
-        
-        try {
-          // Get the file from the download URL if available
-          if (downloadInfo.url) {
-            const response = await fetch(downloadInfo.url);
-            if (response.ok) {
-              const fileBlob = await response.blob();
-              formData.append(`post_analytics_${i}`, fileBlob, downloadInfo.filename);
-              logger.log(`Added file ${downloadInfo.filename} to upload`);
-            } else {
-              logger.warn(`Could not fetch file ${downloadInfo.filename} from URL`);
-            }
+      // Add the downloaded file to the form data
+      try {
+        // Get the file from the download URL if available
+        if (downloadInfo.url) {
+          const response = await fetch(downloadInfo.url);
+          if (response.ok) {
+            const fileBlob = await response.blob();
+            formData.append('post_analytics', fileBlob, downloadInfo.filename);
+            logger.log(`Added file ${downloadInfo.filename} to upload`);
+          } else {
+            throw new Error(`Could not fetch file from URL: ${response.status}`);
           }
-        } catch (error) {
-          logger.warn(`Failed to add file ${downloadInfo.filename}: ${error.message}`);
+        } else {
+          throw new Error('Download URL not available');
         }
+      } catch (fileError) {
+        logger.warn(`Failed to add file ${downloadInfo.filename}: ${fileError.message}`);
+        return { success: false, error: fileError.message };
       }
       
       // Upload to API
@@ -2821,13 +2846,13 @@ const AdvancedPostAnalytics = {
       }
       
       const result = await response.json();
-      logger.log('Advanced post statistics uploaded successfully');
+      logger.log(`Single post analytics uploaded successfully: ${downloadInfo.filename}`);
       
-      return result;
+      return { success: true, result: result };
       
     } catch (error) {
-      logger.error(`Failed to upload advanced post statistics: ${error.message}`);
-      throw error;
+      logger.error(`Failed to upload single post analytics: ${error.message}`);
+      return { success: false, error: error.message };
     }
   },
 

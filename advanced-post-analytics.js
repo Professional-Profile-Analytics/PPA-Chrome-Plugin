@@ -247,11 +247,88 @@ class AdvancedPostAnalytics {
   }
   
   /**
+   * Upload single post analytics to API immediately after download
+   * @param {string} email - User email
+   * @param {string} originalUrl - Original post URL
+   * @param {string} analyticsUrl - Analytics URL
+   * @param {Object} downloadInfo - Download information
+   * @param {Object} logger - Logger instance
+   * @returns {Promise<Object>} Upload result
+   */
+  static async uploadSinglePostAnalytics(email, originalUrl, analyticsUrl, downloadInfo, logger) {
+    const API_ENDPOINT = 'https://mlew54d2u3dfar47trgs2rjjgi0vfopc.lambda-url.us-east-1.on.aws/';
+    
+    try {
+      logger.log(`Uploading single post analytics: ${downloadInfo.filename}`);
+      
+      // Prepare the metadata for this single post
+      const metadata = {
+        email: email,
+        timestamp: new Date().toISOString(),
+        postCount: 1,
+        post: {
+          originalUrl: originalUrl,
+          analyticsUrl: analyticsUrl,
+          downloadFilename: downloadInfo.filename,
+          downloadId: downloadInfo.id
+        }
+      };
+      
+      // Create FormData for this single file upload
+      const formData = new FormData();
+      formData.append('Email', email);
+      formData.append('metadata', JSON.stringify(metadata));
+      
+      // Add the downloaded file to the form data
+      try {
+        // Get the file from the download URL if available
+        if (downloadInfo.url) {
+          const response = await fetch(downloadInfo.url);
+          if (response.ok) {
+            const fileBlob = await response.blob();
+            formData.append('post_analytics', fileBlob, downloadInfo.filename);
+            logger.log(`Added file ${downloadInfo.filename} to upload`);
+          } else {
+            throw new Error(`Could not fetch file from URL: ${response.status}`);
+          }
+        } else {
+          throw new Error('Download URL not available');
+        }
+      } catch (fileError) {
+        logger.warn(`Failed to add file ${downloadInfo.filename}: ${fileError.message}`);
+        return { success: false, error: fileError.message };
+      }
+      
+      // Upload to API
+      logger.log(`Uploading to endpoint: ${API_ENDPOINT}`);
+      const response = await fetch(API_ENDPOINT, {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Upload failed with status ${response.status}: ${errorText}`);
+      }
+      
+      const result = await response.json();
+      logger.log(`Single post analytics uploaded successfully: ${downloadInfo.filename}`);
+      
+      return { success: true, result: result };
+      
+    } catch (error) {
+      logger.error(`Failed to upload single post analytics: ${error.message}`);
+      return { success: false, error: error.message };
+    }
+  },
+
+  /**
    * Upload advanced post statistics to API
    * @param {string} email - User email
    * @param {Array} downloadInfos - Array of download information
    * @param {Object} logger - Logger instance
    * @returns {Promise<Object>} Upload result
+   * @deprecated Use uploadSinglePostAnalytics instead for individual uploads
    */
   static async uploadAdvancedStatistics(email, downloadInfos, logger) {
     const API_ENDPOINT = 'https://mlew54d2u3dfar47trgs2rjjgi0vfopc.lambda-url.us-east-1.on.aws/';
