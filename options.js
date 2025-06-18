@@ -85,6 +85,26 @@ document.addEventListener("DOMContentLoaded", function () {
      });
    });
 
+  // Load and handle advanced post statistics setting
+  chrome.storage.local.get(['advancedPostStats'], function(result) {
+    if (result.advancedPostStats !== undefined) {
+      document.getElementById('advancedPostStats').checked = result.advancedPostStats;
+    }
+  });
+
+  // Save advanced post statistics setting when toggled
+  document.getElementById('advancedPostStats').addEventListener('change', function() {
+    const isEnabled = this.checked;
+    
+    chrome.storage.local.set({ advancedPostStats: isEnabled }, function() {
+      const message = isEnabled 
+        ? "Advanced post statistics enabled. Next download will include detailed post analytics."
+        : "Advanced post statistics disabled. Standard analytics will be downloaded.";
+      
+      showStatusMessage("advancedStatsStatus", message, "success");
+    });
+  });
+
 });
 
 // Function to show status messages with proper styling

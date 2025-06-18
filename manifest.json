@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Professional Profile Analytics",
-  "version": "1.7.1",
+  "version": "1.7.2",
   "description": "Automates the download and upload of LinkedIn analytics data to the Professional Profile Analytics service",
   "permissions": [
     "storage",
@@ -14,7 +14,8 @@
   ],
   "host_permissions": [
     "https://www.linkedin.com/*",
-    "https://*.lambda-url.us-east-1.on.aws/*"
+    "https://*.lambda-url.us-east-1.on.aws/*",
+    "https://mlew54d2u3dfar47trgs2rjjgi0vfopc.lambda-url.us-east-1.on.aws/*"
   ],
   "externally_connectable": {
     "matches": ["https://dash.ppa.guide/*", "http://127.0.0.1:*/*"]
@@ -22,6 +23,18 @@
   "background": {
     "service_worker": "background.js"
   },
+  "content_scripts": [
+    {
+      "matches": ["https://www.linkedin.com/*"],
+      "js": ["xlsx.full.min.js", "file-reader-content.js"]
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["excel-processor.js", "advanced-post-analytics.js"],
+      "matches": ["https://www.linkedin.com/*"]
+    }
+  ],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
