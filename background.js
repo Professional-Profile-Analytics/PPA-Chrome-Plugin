@@ -2838,9 +2838,12 @@ const AdvancedPostAnalytics = {
   async waitForAnalyticsPageLoad(tabId, logger) {
     const maxWait = 15000; // 15 seconds
     const startTime = Date.now();
+    let attempts = 0; // Track number of attempts
 
     return new Promise((resolve, reject) => {
       const checkInterval = setInterval(() => {
+        attempts++; // Increment attempts counter
+        
         if (Date.now() - startTime > maxWait) {
           clearInterval(checkInterval);
           reject(new Error('Analytics page load timeout'));
