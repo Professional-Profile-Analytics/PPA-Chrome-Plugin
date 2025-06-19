@@ -2611,7 +2611,7 @@ const AdvancedPostAnalytics = {
           await this.waitForAnalyticsPageLoad(tabId, logger);
 
           // Export the post analytics
-          const downloadInfo = await this.exportPostAnalytics(tabId, logger);
+          const downloadInfo = await this.exportPostAnalytics(tabId, analyticsUrl, logger);
 
           if (downloadInfo) {
             // Upload immediately after download
@@ -2857,10 +2857,11 @@ const AdvancedPostAnalytics = {
   /**
    * Export post analytics data
    * @param {number} tabId - Tab ID
+   * @param {string} analyticsUrl - Analytics URL for post_id extraction
    * @param {Object} logger - Logger instance
    * @returns {Promise<Object>} Download information
    */
-  async exportPostAnalytics(tabId, logger) {
+  async exportPostAnalytics(tabId, analyticsUrl, logger) {
     return new Promise((resolve, reject) => {
       // Track downloads before clicking export
       const downloadsBeforeExport = [];
