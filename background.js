@@ -688,7 +688,7 @@ const LinkedInMultilingualAutomation = {
    */
   async processAdvancedPostStatistics(tabId, email, logger, postAnalyticsUrls = null) {
     try {
-      logger.log('Starting advanced post statistics processing...');
+      logger.log(`Starting advanced post statistics processing for ${postAnalyticsUrls.length} posts...`);
       
       if (!postAnalyticsUrls || postAnalyticsUrls.length === 0) {
         logger.log('No post analytics URLs provided, skipping advanced statistics');
@@ -2680,7 +2680,6 @@ const AdvancedPostAnalytics = {
 
           if (downloadInfo) {
             // Upload immediately after download
-            logger.log(`Uploading analytics for post: ${postUrl}`);
             const uploadResult = await this.uploadSinglePostAnalytics(
               email,
               postUrl,
@@ -2968,7 +2967,6 @@ const AdvancedPostAnalytics = {
             // Wait for download URL to be captured (same as main download)
             downloadTracker
               .then((downloadUrl) => {
-                logger.log(`✅ Download URL captured`);
                 resolve({ url: downloadUrl, source: 'url_tracking' });
               })
               .catch((error) => {
@@ -3025,7 +3023,7 @@ const AdvancedPostAnalytics = {
               header.value.includes('attachment')
             )) {
           
-          logger.log(`📥 Download URL captured from headers`);
+          logger.log(`📥 Download URL captured`);
           
           // Clean up
           clearTimeout(timeout);
@@ -3352,7 +3350,6 @@ const AdvancedPostAnalytics = {
       logger.log(`Uploading post analytics - Post ID: ${urlPostId}, File: ${filename}`);
       
       // Upload to API with FormData (same as main upload)
-      logger.log(`Uploading to endpoint: ${API_ENDPOINT}`);
       const response = await fetch(API_ENDPOINT, {
         method: 'POST',
         body: formData
