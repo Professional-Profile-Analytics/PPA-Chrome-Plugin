@@ -2875,27 +2875,66 @@ const AdvancedPostAnalytics = {
 
             // Wait for download to start (longer timeout for Chrome download blocking)
             setTimeout(() => {
+              // Extract post_id from current analytics URL for matching
+              const currentPostIdMatch = analyticsUrl.match(/urn:li:activity:(\d+)/);
+              const currentPostId = currentPostIdMatch ? currentPostIdMatch[1] : null;
+              
               chrome.downloads.search({ limit: 10 }, (newItems) => {
-                const newDownloads = newItems.filter(item =>
+                // First priority: PostAnalytics files with matching post_id
+                let newDownloads = newItems.filter(item =>
                   !downloadsBeforeExport.includes(item.id) &&
                   item.filename.endsWith('.xlsx') &&
-                  (item.filename.toLowerCase().includes('postanalytics') ||
-                   item.filename.toLowerCase().includes('post_analytics') ||
-                   item.filename.toLowerCase().includes('analytics'))
+                  item.filename.toLowerCase().includes('postanalytics') &&
+                  (currentPostId ? item.filename.includes(currentPostId) : true)
                 );
+
+                // Second priority: PostAnalytics files (any post_id)
+                if (newDownloads.length === 0) {
+                  newDownloads = newItems.filter(item =>
+                    !downloadsBeforeExport.includes(item.id) &&
+                    item.filename.endsWith('.xlsx') &&
+                    item.filename.toLowerCase().includes('postanalytics')
+                  );
+                }
+
+                // Third priority: Any analytics-related .xlsx file
+                if (newDownloads.length === 0) {
+                  newDownloads = newItems.filter(item =>
+                    !downloadsBeforeExport.includes(item.id) &&
+                    item.filename.endsWith('.xlsx') &&
+                    (item.filename.toLowerCase().includes('analytics') ||
+                     item.filename.toLowerCase().includes('post_analytics'))
+                  );
+                }
 
                 if (newDownloads.length > 0) {
                   const downloadInfo = newDownloads[0];
                   logger.log(`Post analytics download detected: ${downloadInfo.filename}`);
+                  
+                  // Validate the file matches our criteria
+                  const filename = downloadInfo.filename.toLowerCase();
+                  if (filename.includes('postanalytics') && currentPostId && !downloadInfo.filename.includes(currentPostId)) {
+                    logger.warn(`Warning: PostAnalytics file found but post_id mismatch. Expected: ${currentPostId}, File: ${downloadInfo.filename}`);
+                  }
+                  
                   resolve(downloadInfo);
                 } else {
                   // Wait longer for the download (Chrome might be blocking)
                   setTimeout(() => {
                     chrome.downloads.search({ limit: 10 }, (finalItems) => {
-                      const finalNewDownloads = finalItems.filter(item =>
+                      // Apply same filtering logic for extended wait
+                      let finalNewDownloads = finalItems.filter(item =>
                         !downloadsBeforeExport.includes(item.id) &&
-                        item.filename.endsWith('.xlsx')
+                        item.filename.endsWith('.xlsx') &&
+                        item.filename.toLowerCase().includes('postanalytics')
                       );
+
+                      if (finalNewDownloads.length === 0) {
+                        finalNewDownloads = finalItems.filter(item =>
+                          !downloadsBeforeExport.includes(item.id) &&
+                          item.filename.endsWith('.xlsx')
+                        );
+                      }
 
                       if (finalNewDownloads.length > 0) {
                         logger.log(`Download detected after extended wait: ${finalNewDownloads[0].filename}`);
@@ -2911,6 +2950,7 @@ const AdvancedPostAnalytics = {
 
                             if (veryFinalNewDownloads.length > 0) {
                               logger.log(`Download detected after very extended wait: ${veryFinalNewDownloads[0].filename}`);
+                              logger.warn(`Final attempt file may not be PostAnalytics: ${veryFinalNewDownloads[0].filename}`);
                               resolve(veryFinalNewDownloads[0]);
                             } else {
                               logger.warn('No .xlsx download detected after multiple attempts - Chrome may be blocking downloads');
@@ -3080,12 +3120,33 @@ const AdvancedPostAnalytics = {
       const fullPath = downloadInfo.filename;
       const filename = fullPath.split('\\').pop().split('/').pop(); // Handle both Windows (\) and Unix (/) paths
       
+      // Validate that we have the correct file
+      const isPostAnalyticsFile = filename.toLowerCase().includes('postanalytics');
+      const hasMatchingPostId = filename.includes(postId);
+      
+      if (!isPostAnalyticsFile) {
+        logger.warn(`Warning: File does not appear to be a PostAnalytics file: ${filename}`);
+      }
+      
+      if (isPostAnalyticsFile && !hasMatchingPostId) {
+        logger.warn(`Warning: PostAnalytics file found but post_id mismatch. Expected: ${postId}, File: ${filename}`);
+      }
+      
+      if (isPostAnalyticsFile && hasMatchingPostId) {
+        logger.log(`✓ Correct PostAnalytics file detected with matching post_id: ${filename}`);
+      }
+      
       // Prepare FormData for Lambda (same format as main upload)
       const formData = new FormData();
       formData.append('Email', email);
       formData.append('post_id', postId);
       formData.append('filename', filename); // Now just the filename, not full path
       formData.append('analytics_url', analyticsUrl);
+      formData.append('file_validation', JSON.stringify({
+        is_postanalytics_file: isPostAnalyticsFile,
+        has_matching_post_id: hasMatchingPostId,
+        expected_post_id: postId
+      }));
       
       // Convert base64 back to blob for FormData
       const binaryString = atob(fileBase64);
