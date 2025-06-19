@@ -506,9 +506,17 @@ const LinkedInMultilingualAutomation = {
       if (advancedStatsEnabled) {
         logger.log('Advanced post statistics enabled, processing individual posts...');
         try {
-          // Pass the original download URL from the main automation
-          const originalDownloadUrl = downloadResult && downloadResult.downloadUrl ? downloadResult.downloadUrl : null;
-          await this.processAdvancedPostStatistics(tabId, email, logger, originalDownloadUrl);
+          // Get post analytics URLs from API response
+          let postAnalyticsUrls = null;
+          if (downloadResult && downloadResult.apiResponse && downloadResult.apiResponse.post_urls) {
+            postAnalyticsUrls = downloadResult.apiResponse.post_urls;
+            logger.log(`API returned ${postAnalyticsUrls.length} post analytics URLs`);
+          } else {
+            logger.warn('No post analytics URLs found in API response');
+            logger.log('API response:', downloadResult ? downloadResult.apiResponse : 'No response');
+          }
+          
+          await this.processAdvancedPostStatistics(tabId, email, logger, postAnalyticsUrls);
         } catch (error) {
           logger.error(`Advanced post statistics failed: ${error.message}`);
           // Continue with main automation
@@ -552,7 +560,51 @@ const LinkedInMultilingualAutomation = {
    * @param {string} originalDownloadUrl - The original download URL from the main automation
    * @returns {Promise<void>}
    */
-  async processAdvancedPostStatistics(tabId, email, logger, originalDownloadUrl = null) {
+  /**
+   * Process advanced post statistics using URLs from API
+   * @param {number} tabId - The ID of the tab
+   * @param {string} email - The user's email address
+   * @param {Object} logger - The Logger object
+   * @param {string[]} postAnalyticsUrls - Array of analytics URLs from API
+   * @returns {Promise<void>}
+   */
+  async processAdvancedPostStatistics(tabId, email, logger, postAnalyticsUrls = null) {
+    try {
+      logger.log('Starting advanced post statistics processing...');
+      
+      if (!postAnalyticsUrls || postAnalyticsUrls.length === 0) {
+        logger.log('No post analytics URLs provided, skipping advanced statistics');
+        return;
+      }
+      
+      logger.log(`Received ${postAnalyticsUrls.length} post analytics URLs from API`);
+      
+      // Process each analytics URL directly
+      const results = await AdvancedPostAnalytics.processAdvancedStatistics(
+        tabId, 
+        email, 
+        postAnalyticsUrls, 
+        logger
+      );
+      
+      // Results now include individual upload status for each post
+      logger.log(`Advanced post statistics processing completed. Processed: ${results.processed}, Successful: ${results.successful}, Failed: ${results.failed}`);
+      
+      if (results.successful > 0) {
+        logger.log(`Successfully uploaded ${results.successful} individual post analytics files`);
+      }
+      
+      if (results.failed > 0) {
+        logger.warn(`Failed to process ${results.failed} posts. Check logs for details.`);
+      }
+      
+    } catch (error) {
+      logger.error(`Advanced post statistics processing failed: ${error.message}`);
+      // Don't throw the error - we don't want to fail the main automation
+      // if advanced statistics fail
+      logger.log('Continuing with main automation despite advanced statistics failure');
+    }
+  },
     try {
       logger.log('Starting advanced post statistics processing...');
 
@@ -753,12 +805,13 @@ const LinkedInMultilingualAutomation = {
   },
 
   /**
-   * Extract post URLs from downloaded Excel file
-   * @param {Object} downloadInfo - Download information from Chrome downloads API
+   * Upload advanced post statistics to API
+   * @param {string} email - User email
+   * @param {Array} downloadInfos - Array of download information
    * @param {Object} logger - Logger instance
-   * @returns {Promise<string[]>} Array of post URLs
+   * @returns {Promise<Object>} Upload result
    */
-  async extractPostUrlsFromDownload(downloadInfo, logger) {
+  async uploadAdvancedStatistics(email, downloadInfos, logger) {
     try {
       logger.log(`Attempting to extract post URLs from: ${downloadInfo.filename}`);
       logger.log(`Download URL: ${downloadInfo.url}`);
