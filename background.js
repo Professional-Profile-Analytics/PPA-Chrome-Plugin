@@ -508,15 +508,36 @@ const LinkedInMultilingualAutomation = {
         try {
           // Get post analytics URLs from API response
           let postAnalyticsUrls = null;
-          if (downloadResult && downloadResult.apiResponse && downloadResult.apiResponse.post_urls) {
-            postAnalyticsUrls = downloadResult.apiResponse.post_urls;
-            logger.log(`API returned ${postAnalyticsUrls.length} post analytics URLs`);
+          if (downloadResult && downloadResult.apiResponse) {
+            // Parse the response body if it's a string
+            let responseBody = downloadResult.apiResponse;
+            if (typeof responseBody === 'string') {
+              try {
+                responseBody = JSON.parse(responseBody);
+              } catch (parseError) {
+                logger.error(`Failed to parse API response: ${parseError.message}`);
+              }
+            }
+            
+            // Extract URLs from the response body
+            if (responseBody && responseBody.extracted_urls) {
+              postAnalyticsUrls = responseBody.extracted_urls;
+              logger.log(`API returned ${postAnalyticsUrls.length} extracted analytics URLs`);
+              logger.log(`Sample URLs: ${postAnalyticsUrls.slice(0, 3).join(', ')}`);
+            } else {
+              logger.warn('No extracted_urls found in API response');
+              logger.log('API response structure:', responseBody);
+            }
           } else {
-            logger.warn('No post analytics URLs found in API response');
-            logger.log('API response:', downloadResult ? downloadResult.apiResponse : 'No response');
+            logger.warn('No API response available for advanced statistics');
+            logger.log('Download result:', downloadResult);
           }
           
-          await this.processAdvancedPostStatistics(tabId, email, logger, postAnalyticsUrls);
+          if (postAnalyticsUrls && postAnalyticsUrls.length > 0) {
+            await this.processAdvancedPostStatistics(tabId, email, logger, postAnalyticsUrls);
+          } else {
+            logger.log('No analytics URLs to process, skipping advanced statistics');
+          }
         } catch (error) {
           logger.error(`Advanced post statistics failed: ${error.message}`);
           // Continue with main automation
@@ -977,11 +998,17 @@ const LinkedInMultilingualAutomation = {
       downloadUrl = apiURL;
       logger.log(`Download URL captured: ${downloadUrl}`);
 
-      // If download is successful, upload the file
-      await fileUploader.uploadToWebhook(apiURL, email);
+      // If download is successful, upload the file and get API response
+      const apiResponse = await fileUploader.uploadToWebhook(apiURL, email);
       downloadTracked = true;
+      
+      logger.log('API response received for advanced statistics processing');
 
-      return { success: true, downloadUrl: downloadUrl };
+      return { 
+        success: true, 
+        downloadUrl: downloadUrl,
+        apiResponse: apiResponse
+      };
 
     } catch (error) {
       logger.warn(`Attempt to click 'export' failed: ${error.message}`);
@@ -1334,7 +1361,32 @@ const FileUploader = {
       }
 
       Logger.log('File successfully uploaded');
-      return await uploadResponse.json();
+      const response = await uploadResponse.json();
+      
+      // Handle Lambda response format with statusCode and body
+      if (response.statusCode === 200 && response.body) {
+        // Parse the body if it's a string
+        let responseBody = response.body;
+        if (typeof responseBody === 'string') {
+          try {
+            responseBody = JSON.parse(responseBody);
+          } catch (parseError) {
+            Logger.warn(`Failed to parse response body: ${parseError.message}`);
+            responseBody = response.body;
+          }
+        }
+        
+        Logger.log(`API response: ${responseBody.message || 'Success'}`);
+        if (responseBody.extracted_urls) {
+          Logger.log(`Extracted ${responseBody.extracted_urls.length} analytics URLs from Excel file`);
+        }
+        
+        return responseBody;
+      } else {
+        // Fallback for direct response format
+        Logger.log(`API response: ${response.message || 'Success'}`);
+        return response;
+      }
 
     } catch (error) {
       Logger.error(`File upload error: ${error.message}`);
