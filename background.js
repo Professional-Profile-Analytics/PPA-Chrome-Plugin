@@ -1038,18 +1038,18 @@ const FileUploader = {
       }
 
       Logger.log('File successfully uploaded');
-      const response = await uploadResponse.json();
+      const apiResponse = await uploadResponse.json();
       
       // Handle Lambda response format with statusCode and body
-      if (response.statusCode === 200 && response.body) {
+      if (apiResponse.statusCode === 200 && apiResponse.body) {
         // Parse the body if it's a string
-        let responseBody = response.body;
+        let responseBody = apiResponse.body;
         if (typeof responseBody === 'string') {
           try {
             responseBody = JSON.parse(responseBody);
           } catch (parseError) {
             Logger.warn(`Failed to parse response body: ${parseError.message}`);
-            responseBody = response.body;
+            responseBody = apiResponse.body;
           }
         }
         
@@ -1061,8 +1061,8 @@ const FileUploader = {
         return responseBody;
       } else {
         // Fallback for direct response format
-        Logger.log(`API response: ${response.message || 'Success'}`);
-        return response;
+        Logger.log(`API response: ${apiResponse.message || 'Success'}`);
+        return apiResponse;
       }
 
     } catch (error) {
