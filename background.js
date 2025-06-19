@@ -508,7 +508,14 @@ const LinkedInMultilingualAutomation = {
       // Create success message with post count if advanced stats was processed
       let successMessage = '✅Success';
       if (advancedStatsResults && advancedStatsResults.processed) {
-        successMessage = `✅Success (${advancedStatsResults.processed} posts processed)`;
+        const totalAvailable = advancedStatsResults.totalAvailable || advancedStatsResults.processed;
+        const processed = advancedStatsResults.processed;
+        
+        if (totalAvailable > processed) {
+          successMessage = `✅Success (${processed}/${totalAvailable} posts processed)`;
+        } else {
+          successMessage = `✅Success (${processed} posts processed)`;
+        }
       } else if (await configManager.getAdvancedPostStatistics()) {
         successMessage = '✅Success (Advanced post statistics enabled)';
       }
@@ -622,7 +629,14 @@ const LinkedInMultilingualAutomation = {
       // Create success message with post count if advanced stats was processed
       let successMessage = '✅Success';
       if (advancedStatsResults && advancedStatsResults.processed) {
-        successMessage = `✅Success (${advancedStatsResults.processed} posts processed)`;
+        const totalAvailable = advancedStatsResults.totalAvailable || advancedStatsResults.processed;
+        const processed = advancedStatsResults.processed;
+        
+        if (totalAvailable > processed) {
+          successMessage = `✅Success (${processed}/${totalAvailable} posts processed)`;
+        } else {
+          successMessage = `✅Success (${processed} posts processed)`;
+        }
       } else if (await configManager.getAdvancedPostStatistics()) {
         successMessage = '✅Success (Advanced post statistics enabled)';
       }
@@ -2621,21 +2635,35 @@ const AdvancedPostAnalytics = {
    * @returns {Promise<Object>} Processing results
    */
   async processAdvancedStatistics(tabId, email, postUrls, logger) {
-    logger.log(`Starting advanced post statistics processing for ${postUrls.length} posts`);
+    // Get posts limit from storage (default 30)
+    const postsLimit = await new Promise((resolve) => {
+      chrome.storage.local.get(['postsLimit'], (result) => {
+        resolve(result.postsLimit || 30);
+      });
+    });
+    
+    // Limit the number of posts to process
+    const totalAvailable = postUrls.length;
+    const postsToProcess = Math.min(totalAvailable, postsLimit);
+    const limitedPostUrls = postUrls.slice(0, postsToProcess);
+    
+    logger.log(`Posts available: ${totalAvailable}, Posts limit: ${postsLimit}, Processing: ${postsToProcess} posts`);
 
     const results = {
       processed: 0,
       successful: 0,
       failed: 0,
       uploads: [],
-      errors: []
+      errors: [],
+      totalAvailable: totalAvailable,
+      postsLimit: postsLimit
     };
 
     try {
-      // Process each post URL
-      for (let i = 0; i < postUrls.length; i++) {
-        const postUrl = postUrls[i];
-        logger.log(`Processing post ${i + 1}/${postUrls.length}: ${postUrl}`);
+      // Process each post URL (limited by user setting)
+      for (let i = 0; i < limitedPostUrls.length; i++) {
+        const postUrl = limitedPostUrls[i];
+        logger.log(`Processing post ${i + 1}/${limitedPostUrls.length}: ${postUrl}`);
 
         try {
           // Transform URL to analytics format
@@ -2669,7 +2697,7 @@ const AdvancedPostAnalytics = {
                 uploadResult: uploadResult
               });
               results.successful++;
-              logger.log(`✅ Post ${i}/${postUrls.length} uploaded successfully`);
+              logger.log(`✅ Post ${i + 1}/${limitedPostUrls.length} uploaded successfully`);
             } else {
               logger.error(`❌ Upload failed for post ${postUrl}: ${uploadResult.error}`);
               results.errors.push({
@@ -2690,7 +2718,7 @@ const AdvancedPostAnalytics = {
           results.processed++;
 
           // Add significant delay between posts to avoid Chrome download blocking
-          if (i < postUrls.length - 1) {
+          if (i < limitedPostUrls.length - 1) {
             const delayTime = 8000 + Math.random() * 7000; // 8-15 second delay
             logger.log(`Waiting ${Math.round(delayTime/1000)} seconds before next post to avoid download blocking...`);
             await this.delay(delayTime);
@@ -2723,7 +2751,7 @@ const AdvancedPostAnalytics = {
           results.processed++;
           
           // Still add delay even on error to avoid rapid requests
-          if (i < postUrls.length - 1) {
+          if (i < limitedPostUrls.length - 1) {
             const delayTime = 5000 + Math.random() * 3000; // 5-8 second delay on error
             logger.log(`Error occurred, waiting ${Math.round(delayTime/1000)} seconds before next post...`);
             await this.delay(delayTime);

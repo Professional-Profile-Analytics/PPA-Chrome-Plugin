@@ -86,12 +86,29 @@
                       <input class="form-check-input" type="checkbox" id="advancedPostStats">
                     </div>
                   </div>
+                  
+                  <!-- Posts Limit Slider -->
+                  <div id="postsLimitContainer" class="mt-3" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                      <label for="postsLimit" class="form-label mb-0 small text-muted">
+                        <i class="bi bi-sliders me-1"></i>
+                        Number of posts to process:
+                      </label>
+                      <span id="postsLimitValue" class="badge bg-primary">30</span>
+                    </div>
+                    <input type="range" class="form-range" id="postsLimit" min="5" max="50" value="30" step="5">
+                    <div class="d-flex justify-content-between small text-muted">
+                      <span>5</span>
+                      <span>50</span>
+                    </div>
+                  </div>
+                  
                   <div class="alert alert-warning py-2 mb-0" role="alert">
                     <small>
                       <i class="bi bi-info-circle me-1"></i>
                       <strong>Note:</strong> When enabled, the download & upload process will run significantly longer 
                       as each individual post will be accessed for detailed statistics. The process uses human-like 
-                      simulation with natural delays and interactions, ensuring no risk of LinkedIn account blocking.
+                      simulation with natural delays and interactions, ensuring <strong>no risk</strong> of LinkedIn account blocking.
                     </small>
                   </div>
                   <div id="advancedStatsStatus" class="status-message mt-2"></div>

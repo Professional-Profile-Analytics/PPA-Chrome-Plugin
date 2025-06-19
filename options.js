@@ -86,15 +86,24 @@ document.addEventListener("DOMContentLoaded", function () {
    });
 
   // Load and handle advanced post statistics setting
-  chrome.storage.local.get(['advancedPostStats'], function(result) {
+  chrome.storage.local.get(['advancedPostStats', 'postsLimit'], function(result) {
     if (result.advancedPostStats !== undefined) {
       document.getElementById('advancedPostStats').checked = result.advancedPostStats;
+      togglePostsLimitSlider(result.advancedPostStats);
     }
+    
+    // Load posts limit (default 30)
+    const postsLimit = result.postsLimit || 30;
+    document.getElementById('postsLimit').value = postsLimit;
+    document.getElementById('postsLimitValue').textContent = postsLimit;
   });
 
   // Save advanced post statistics setting when toggled
   document.getElementById('advancedPostStats').addEventListener('change', function() {
     const isEnabled = this.checked;
+    
+    // Show/hide posts limit slider
+    togglePostsLimitSlider(isEnabled);
     
     chrome.storage.local.set({ advancedPostStats: isEnabled }, function() {
       const message = isEnabled 
@@ -104,6 +113,22 @@ document.addEventListener("DOMContentLoaded", function () {
       showStatusMessage("advancedStatsStatus", message, "success");
     });
   });
+
+  // Handle posts limit slider
+  document.getElementById('postsLimit').addEventListener('input', function() {
+    const value = this.value;
+    document.getElementById('postsLimitValue').textContent = value;
+    
+    chrome.storage.local.set({ postsLimit: parseInt(value) }, function() {
+      showStatusMessage("advancedStatsStatus", `Posts limit set to ${value}`, "success");
+    });
+  });
+
+  // Function to show/hide posts limit slider
+  function togglePostsLimitSlider(show) {
+    const container = document.getElementById('postsLimitContainer');
+    container.style.display = show ? 'block' : 'none';
+  }
 
 });
 
