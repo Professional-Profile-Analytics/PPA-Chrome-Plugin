@@ -3,7 +3,7 @@
  *
  * This script handles the automated download and upload of LinkedIn analytics data
  * to the Professional Profile Analytics service.
- * 
+ *
  * It also provides an interface for the Shiny web app to trigger the extension
  * to open tabs and simulate human typing.
  */
@@ -497,7 +497,7 @@ const LinkedInMultilingualAutomation = {
             resolve(result.advancedPostStats || false);
           });
         });
-        
+
         logger.log(`Advanced post statistics setting: ${advancedStatsEnabled}`);
       } catch (error) {
         logger.warn(`Failed to check advanced stats setting: ${error.message}`);
@@ -555,19 +555,19 @@ const LinkedInMultilingualAutomation = {
   async processAdvancedPostStatistics(tabId, email, logger, originalDownloadUrl = null) {
     try {
       logger.log('Starting advanced post statistics processing...');
-      
+
       if (originalDownloadUrl) {
         logger.log(`Using original download URL: ${originalDownloadUrl}`);
-        
+
         // Try to read the Excel file directly from the original URL
         try {
           logger.log('Attempting to read Excel file from original LinkedIn URL...');
           const response = await fetch(originalDownloadUrl);
-          
+
           if (response.ok) {
             const arrayBuffer = await response.arrayBuffer();
             logger.log(`File size from original URL: ${arrayBuffer.byteLength} bytes`);
-            
+
             // Create a mock download info object
             const mockDownloadInfo = {
               filename: 'main_analytics.xlsx',
@@ -575,31 +575,31 @@ const LinkedInMultilingualAutomation = {
               state: 'complete',
               id: 'original'
             };
-            
+
             // Try to extract URLs using the original file
             const postUrls = await this.extractPostUrlsFromOriginalFile(arrayBuffer, logger);
-            
+
             if (postUrls.length > 0) {
               logger.log(`Found ${postUrls.length} post URLs from original file`);
-              
+
               // Process each post's analytics
               const results = await AdvancedPostAnalytics.processAdvancedStatistics(
-                tabId, 
-                email, 
-                postUrls, 
+                tabId,
+                email,
+                postUrls,
                 logger
               );
-              
+
               logger.log(`Advanced post statistics processing completed. Processed: ${results.processed}, Successful: ${results.successful}, Failed: ${results.failed}`);
-              
+
               if (results.successful > 0) {
                 logger.log(`Successfully uploaded ${results.successful} individual post analytics files`);
               }
-              
+
               if (results.failed > 0) {
                 logger.warn(`Failed to process ${results.failed} posts. Check logs for details.`);
               }
-              
+
               return; // Success, exit early
             }
           } else {
@@ -609,36 +609,36 @@ const LinkedInMultilingualAutomation = {
           logger.error(`Failed to process original download URL: ${error.message}`);
         }
       }
-      
+
       // Fallback to the previous method using recent downloads
       logger.log('Falling back to recent downloads method...');
-      
+
       // Wait a moment for downloads to be fully registered
       await new Promise(resolve => setTimeout(resolve, 2000));
-      
+
       // Get the most recent download (should be the main analytics file)
       const recentDownloads = await new Promise((resolve) => {
-        chrome.downloads.search({ 
+        chrome.downloads.search({
           limit: 10, // Increased from 5 to catch more files
           orderBy: ['-startTime']
         }, resolve);
       });
-      
+
       // Debug: Log all recent downloads
       logger.log('Recent downloads found:');
       recentDownloads.forEach((download, index) => {
         logger.log(`  ${index + 1}. ${download.filename} (state: ${download.state}, id: ${download.id})`);
       });
-      
+
       // Look for the main analytics file with broader criteria
       const mainAnalyticsFile = recentDownloads.find(download => {
         const filename = download.filename.toLowerCase();
         const isExcel = download.filename.endsWith('.xlsx');
         const isComplete = download.state === 'complete';
-        
+
         // Check various patterns that LinkedIn analytics files might have
         const hasAnalyticsPattern = (
-          filename.includes('analytics') || 
+          filename.includes('analytics') ||
           filename.includes('content') ||
           filename.includes('linkedin') ||
           download.filename.includes('Dr.') || // Common pattern in LinkedIn exports
@@ -646,49 +646,49 @@ const LinkedInMultilingualAutomation = {
           filename.includes('post') ||
           filename.includes('activity')
         );
-        
+
         logger.log(`  Checking ${download.filename}: excel=${isExcel}, complete=${isComplete}, pattern=${hasAnalyticsPattern}`);
-        
+
         return hasAnalyticsPattern && isExcel && isComplete;
       });
-      
+
       if (!mainAnalyticsFile) {
         logger.warn('Main analytics file not found in recent downloads, skipping advanced statistics');
         logger.log('If you just downloaded a LinkedIn analytics file, it might not be detected. Please check the filename patterns.');
         return;
       }
-      
+
       logger.log(`Found main analytics file: ${mainAnalyticsFile.filename}`);
-      
+
       // Read the Excel file and extract post URLs
       const postUrls = await this.extractPostUrlsFromDownload(mainAnalyticsFile, logger);
-      
+
       if (postUrls.length === 0) {
         logger.log('No post URLs found in analytics file, skipping advanced statistics');
         return;
       }
-      
+
       logger.log(`Found ${postUrls.length} post URLs for advanced processing`);
-      
+
       // Process each post's analytics
       const results = await AdvancedPostAnalytics.processAdvancedStatistics(
-        tabId, 
-        email, 
-        postUrls, 
+        tabId,
+        email,
+        postUrls,
         logger
       );
-      
+
       // Results now include individual upload status for each post
       logger.log(`Advanced post statistics processing completed. Processed: ${results.processed}, Successful: ${results.successful}, Failed: ${results.failed}`);
-      
+
       if (results.successful > 0) {
         logger.log(`Successfully uploaded ${results.successful} individual post analytics files`);
       }
-      
+
       if (results.failed > 0) {
         logger.warn(`Failed to process ${results.failed} posts. Check logs for details.`);
       }
-      
+
     } catch (error) {
       logger.error(`Advanced post statistics processing failed: ${error.message}`);
       // Don't throw the error - we don't want to fail the main automation
@@ -706,24 +706,24 @@ const LinkedInMultilingualAutomation = {
   async extractPostUrlsFromOriginalFile(arrayBuffer, logger) {
     try {
       logger.log('Attempting to extract URLs from original file ArrayBuffer...');
-      
+
       // Since XLSX library is not available in service worker, we'll use a different approach
       // Convert ArrayBuffer to text and look for URL patterns
       const uint8Array = new Uint8Array(arrayBuffer);
       const textDecoder = new TextDecoder('utf-8', { ignoreBOM: true, fatal: false });
       const fileText = textDecoder.decode(uint8Array);
-      
+
       logger.log(`File converted to text, length: ${fileText.length} characters`);
-      
+
       // Look for LinkedIn URL patterns in the text
       const urlPatterns = [
         /https:\/\/www\.linkedin\.com\/posts\/[^"\s]+/g,
         /https:\/\/www\.linkedin\.com\/feed\/update\/[^"\s]+/g,
         /linkedin\.com\/posts\/[^"\s]+activity-\d{19}[^"\s]*/g
       ];
-      
+
       const foundUrls = new Set();
-      
+
       urlPatterns.forEach((pattern, index) => {
         const matches = fileText.match(pattern);
         if (matches) {
@@ -740,12 +740,12 @@ const LinkedInMultilingualAutomation = {
           logger.log(`Pattern ${index + 1} found no matches`);
         }
       });
-      
+
       const urls = Array.from(foundUrls);
       logger.log(`Extracted ${urls.length} unique LinkedIn URLs from file text`);
-      
+
       return urls;
-      
+
     } catch (error) {
       logger.error(`Failed to extract URLs from original file: ${error.message}`);
       return [];
@@ -764,32 +764,32 @@ const LinkedInMultilingualAutomation = {
       logger.log(`Download URL: ${downloadInfo.url}`);
       logger.log(`Download state: ${downloadInfo.state}`);
       logger.log(`Download ID: ${downloadInfo.id}`);
-      
+
       // Try to read the file if it's still accessible via URL
       if (downloadInfo.url && downloadInfo.url.startsWith('blob:')) {
         try {
           logger.log('Attempting to read Excel file via blob URL...');
-          
+
           const response = await fetch(downloadInfo.url);
           logger.log(`Fetch response status: ${response.status}`);
-          
+
           if (response.ok) {
             const arrayBuffer = await response.arrayBuffer();
             logger.log(`File size: ${arrayBuffer.byteLength} bytes`);
-            
+
             // Try to parse with XLSX library (if available in this context)
             if (typeof XLSX !== 'undefined') {
               logger.log('XLSX library is available, parsing file...');
-              
+
               const workbook = XLSX.read(arrayBuffer, { type: 'array' });
               logger.log(`Workbook sheets: ${workbook.SheetNames.join(', ')}`);
-              
+
               if (workbook.SheetNames.length >= 3) {
                 const thirdSheet = workbook.Sheets[workbook.SheetNames[2]];
                 const jsonData = XLSX.utils.sheet_to_json(thirdSheet, { header: 1 });
-                
+
                 logger.log(`Third sheet "${workbook.SheetNames[2]}" has ${jsonData.length} rows`);
-                
+
                 // Extract URLs from first column, starting from row 4 (index 3)
                 const urls = [];
                 for (let i = 3; i < jsonData.length; i++) {
@@ -805,10 +805,10 @@ const LinkedInMultilingualAutomation = {
                     }
                   }
                 }
-                
+
                 logger.log(`Successfully extracted ${urls.length} URLs from Excel file`);
                 return urls;
-                
+
               } else {
                 logger.warn(`Excel file only has ${workbook.SheetNames.length} sheets, need at least 3`);
               }
@@ -825,26 +825,26 @@ const LinkedInMultilingualAutomation = {
       } else {
         logger.warn(`Download URL not available or not a blob URL: ${downloadInfo.url}`);
       }
-      
+
       // Since we can't read the Excel file directly in the service worker,
       // let's try to use the WebRequestTracker to get the original download URL
       logger.log('Attempting to use original download URL from WebRequestTracker...');
-      
+
       // Check if we have access to the original download URL that was tracked
       if (downloadInfo.finalUrl || downloadInfo.referrer) {
         logger.log(`Final URL: ${downloadInfo.finalUrl}`);
         logger.log(`Referrer: ${downloadInfo.referrer}`);
-        
+
         try {
           const originalUrl = downloadInfo.finalUrl || downloadInfo.url;
           if (originalUrl && originalUrl.includes('linkedin.com/ambry')) {
             logger.log('Attempting to re-fetch from original LinkedIn URL...');
             const response = await fetch(originalUrl);
-            
+
             if (response.ok) {
               const arrayBuffer = await response.arrayBuffer();
               logger.log(`Re-fetched file size: ${arrayBuffer.byteLength} bytes`);
-              
+
               // Try to inject XLSX processing into a content script
               logger.log('File successfully re-fetched, but XLSX processing not available in service worker');
             }
@@ -853,7 +853,7 @@ const LinkedInMultilingualAutomation = {
           logger.error(`Failed to re-fetch from original URL: ${error.message}`);
         }
       }
-      
+
       // Fallback: Use simulated URLs for testing, but make them more realistic
       logger.log('Using fallback method - simulated post URLs based on actual LinkedIn patterns');
       const simulatedUrls = [
@@ -861,14 +861,14 @@ const LinkedInMultilingualAutomation = {
         'https://www.linkedin.com/feed/update/urn:li:activity:7341072233987026945/',
         'https://www.linkedin.com/posts/dr-markusschmidberger_activity-7341072233987026946-efgh'
       ];
-      
+
       logger.log(`Generated ${simulatedUrls.length} simulated post URLs for testing`);
       simulatedUrls.forEach((url, index) => {
         logger.log(`  ${index + 1}. ${url}`);
       });
-      
+
       return simulatedUrls;
-      
+
     } catch (error) {
       logger.error(`Failed to extract post URLs: ${error.message}`);
       logger.error(`Error stack: ${error.stack}`);
@@ -887,7 +887,7 @@ const LinkedInMultilingualAutomation = {
       /linkedin\.com\/feed\/update\//,
       /activity[:-]\d{19}/
     ];
-    
+
     return linkedInPatterns.some(pattern => pattern.test(url));
   },
 
@@ -927,9 +927,9 @@ const LinkedInMultilingualAutomation = {
       // If download is successful, upload the file
       await fileUploader.uploadToWebhook(apiURL, email);
       downloadTracked = true;
-      
+
       return { success: true, downloadUrl: downloadUrl };
-      
+
     } catch (error) {
       logger.warn(`Attempt to click 'export' failed: ${error.message}`);
       throw error;
@@ -1333,15 +1333,6 @@ async function scheduleRetry() {
   Logger.log('Using alarm-based retry mechanism only');
 }
 
-    // Debug information about all alarms
-    //chrome.alarms.getAll((alarms) => {
-    //  Logger.log(`Current alarms: ${JSON.stringify(alarms.map(a => ({
-    //    name: a.name,
-    //    scheduledTime: new Date(a.scheduledTime).toISOString(),
-    //    periodInMinutes: a.periodInMinutes
-    //  })))}`);
-    //});
-}
 
 // ============================================================================
 // MAIN AUTOMATION SCRIPT
@@ -1397,7 +1388,7 @@ async function runAutomationScript() {
           // Clear retry flags
           chrome.storage.local.remove(['nextRetryTime', 'retryScheduled']);
           Logger.log(`=== AUTOMATION COMPLETED SUCCESSFULLY at ${new Date().toISOString()} ===`);
-          
+
           // Check if company page upload is needed
           await checkAndRunCompanyPageUpload();
         } catch (error) {
@@ -1442,7 +1433,7 @@ async function runAutomationScript() {
           // Clear retry flags
           chrome.storage.local.remove(['nextRetryTime', 'retryScheduled']);
           Logger.log(`=== AUTOMATION COMPLETED SUCCESSFULLY at ${new Date().toISOString()} ===`);
-          
+
           // Check if company page upload is needed
           await checkAndRunCompanyPageUpload();
         } catch (error) {
@@ -1482,24 +1473,24 @@ async function checkAndRunCompanyPageUpload() {
       Logger.log('Company automation already running, skipping duplicate request');
       return;
     }
-    
+
     Logger.log('Checking if company page upload is needed...');
-    
+
     // Get company ID from storage
     const result = await new Promise((resolve) => {
       chrome.storage.local.get(['companyId', 'lastCompanyExecutionTime'], resolve);
     });
-    
+
     if (!result.companyId) {
       Logger.log('No company ID configured, skipping company page upload');
       return;
     }
-    
+
     const companyId = result.companyId;
     const lastCompanyExecution = result.lastCompanyExecutionTime;
     const now = Date.now();
     const sevenDaysAgo = now - (7 * 24 * 60 * 60 * 1000); // 7 days in milliseconds
-    
+
     // Check if last execution was more than 7 days ago or never executed
     if (!lastCompanyExecution || lastCompanyExecution < sevenDaysAgo) {
       Logger.log(`Company page upload needed. Last execution: ${lastCompanyExecution ? new Date(lastCompanyExecution).toISOString() : 'Never'}`);
@@ -1522,26 +1513,26 @@ async function checkAndRunCompanyPageUpload() {
 async function runCompanyPageAutomation(companyId) {
   // Set the running flag
   companyAutomationRunning = true;
-  
+
   try {
     Logger.log(`Starting company page automation for company ${companyId}`);
-    
+
     // Update company execution status
     const now = Date.now();
     chrome.storage.local.set({
       lastCompanyExecutionTime: now,
       lastCompanyExecutionStatus: 'Running'
     });
-    
+
     // Get user email
     const email = await ConfigManager.getEmail();
     if (!email) {
       throw new Error('User email not configured');
     }
-    
+
     // Create tab for company analytics page
     const companyUrl = `https://www.linkedin.com/company/${companyId}/admin/analytics/updates/`;
-    
+
     chrome.tabs.create({
       url: companyUrl,
       active: false
@@ -1553,25 +1544,25 @@ async function runCompanyPageAutomation(companyId) {
         companyAutomationRunning = false; // Reset flag
         return;
       }
-      
+
       const tabId = tab.id;
       Logger.log(`Created company analytics tab with ID: ${tabId}`);
-      
+
       try {
         await executeCompanyPageSteps(tabId, companyId, email);
-        
+
         // Update success status
         await updateCompanyExecutionStatus('Success');
-        
+
         // Schedule next execution (7 days from now)
         const nextExecution = now + (7 * 24 * 60 * 60 * 1000);
         chrome.storage.local.set({ nextCompanyExecution: nextExecution });
-        
+
         Logger.log(`Company page automation completed successfully`);
       } catch (error) {
         Logger.error(`Company page automation failed: ${error.message}`);
         await updateCompanyExecutionStatus('Failed', error);
-        
+
         // Close the tab if it still exists
         try {
           chrome.tabs.remove(tabId);
@@ -1603,30 +1594,30 @@ async function executeCompanyPageSteps(tabId, companyId, email) {
     let exportPopupHandled = false;
     let secondExportClicked = false;
     const timeout = 120000; // 120 seconds timeout (increased for popup handling)
-    
+
     // Set up download listener
     const downloadListener = (downloadItem) => {
       // Only log if it's a potential analytics file
-      if (downloadItem.filename && 
-          (downloadItem.filename.includes('analytics') || 
+      if (downloadItem.filename &&
+          (downloadItem.filename.includes('analytics') ||
            downloadItem.filename.includes('export') ||
            downloadItem.filename.includes('company') ||
            downloadItem.filename.toLowerCase().includes('.xlsx') ||
            downloadItem.filename.toLowerCase().includes('.xls'))) {
-        
+
         downloadStarted = true;
         Logger.log(`Company analytics download started: ${downloadItem.filename.split('/').pop() || downloadItem.filename.split('\\').pop()}`);
-        
+
         // Monitor download completion
         const checkDownload = () => {
           chrome.downloads.search({ id: downloadItem.id }, (results) => {
             if (results.length > 0) {
               const download = results[0];
-              
+
               if (download.state === 'complete') {
                 downloadCompleted = true;
                 Logger.log(`Company analytics download completed successfully`);
-                
+
                 // Upload the file
                 uploadCompanyFile(download.filename, companyId, email)
                   .then(() => {
@@ -1656,20 +1647,20 @@ async function executeCompanyPageSteps(tabId, companyId, email) {
             }
           });
         };
-        
+
         setTimeout(checkDownload, 1000);
       }
     };
-    
+
     chrome.downloads.onCreated.addListener(downloadListener);
-    
+
     // Wait for page to load and then click first export button
     chrome.tabs.onUpdated.addListener(function listener(updatedTabId, changeInfo) {
       if (updatedTabId === tabId && changeInfo.status === 'complete') {
         chrome.tabs.onUpdated.removeListener(listener);
-        
+
         Logger.log('Company analytics page loaded, looking for first export button...');
-        
+
         // Wait a bit for the page to fully render
         setTimeout(() => {
           // Inject script to find and click first export button
@@ -1679,12 +1670,12 @@ async function executeCompanyPageSteps(tabId, companyId, email) {
           }, (results) => {
             if (results && results[0] && results[0].result) {
               Logger.log('First company export button clicked successfully');
-              
+
               // Wait for popup/modal to appear and then handle the second export button
               setTimeout(() => {
                 handleExportPopup(tabId);
               }, 3000); // Increased wait time to 3 seconds for popup to appear
-              
+
             } else {
               chrome.downloads.onCreated.removeListener(downloadListener);
               reject(new Error('Failed to find or click first company export button'));
@@ -1693,11 +1684,11 @@ async function executeCompanyPageSteps(tabId, companyId, email) {
         }, 3000);
       }
     });
-    
+
     // Function to handle the export popup/modal
     const handleExportPopup = (tabId) => {
       Logger.log('Looking for second export button in popup/modal...');
-      
+
       chrome.scripting.executeScript({
         target: { tabId },
         function: findAndClickSecondExportButton
@@ -1706,12 +1697,12 @@ async function executeCompanyPageSteps(tabId, companyId, email) {
           Logger.log('Second company export button clicked successfully');
           exportPopupHandled = true;
           secondExportClicked = true;
-          
+
           // Wait longer for download to start after second click (5 seconds)
           setTimeout(() => {
             if (!downloadStarted) {
               Logger.log('Checking for recent company analytics downloads...');
-              
+
               // Check for any recent downloads that might be the company file
               checkForRecentDownloads(companyId, email)
                 .then(() => {
@@ -1752,10 +1743,10 @@ async function executeCompanyPageSteps(tabId, companyId, email) {
                 });
             }
           }, 5000); // Wait 5 seconds after second export click
-          
+
         } else {
           Logger.log('Second export button not found, trying alternative approaches...');
-          
+
           // Try alternative approaches for the popup
           setTimeout(() => {
             chrome.scripting.executeScript({
@@ -1766,7 +1757,7 @@ async function executeCompanyPageSteps(tabId, companyId, email) {
                 Logger.log('Alternative export button clicked successfully');
                 exportPopupHandled = true;
                 secondExportClicked = true;
-                
+
                 // Wait for download after alternative click
                 setTimeout(() => {
                   if (!downloadStarted) {
@@ -1791,12 +1782,12 @@ async function executeCompanyPageSteps(tabId, companyId, email) {
         }
       });
     };
-    
+
     // Set timeout for the entire process
     setTimeout(() => {
       if (!downloadCompleted) {
         Logger.log('Company automation timeout - checking for recent downloads...');
-        
+
         if (secondExportClicked) {
           // If we clicked the second export button, check for recent downloads
           checkForRecentDownloads(companyId, email)
@@ -1857,26 +1848,26 @@ async function checkForRecentDownloads(companyId, email) {
   return new Promise((resolve, reject) => {
     // Look for downloads from the last 30 seconds
     const thirtySecondsAgo = Date.now() - 30000;
-    
+
     chrome.downloads.search({
       orderBy: ['-startTime'],
       limit: 10
     }, async (downloads) => {
-      
+
       for (const download of downloads) {
         // Check if download started recently and looks like analytics data
         if (download.startTime && new Date(download.startTime).getTime() > thirtySecondsAgo) {
-          
+
           // Check if filename suggests it's analytics data (xls/xlsx format)
-          if (download.filename && 
-              (download.filename.includes('analytics') || 
+          if (download.filename &&
+              (download.filename.includes('analytics') ||
                download.filename.includes('export') ||
                download.filename.includes('company') ||
                download.filename.toLowerCase().includes('.xlsx') ||
                download.filename.toLowerCase().includes('.xls'))) {
-            
+
             Logger.log(`Found recent company analytics file`);
-            
+
             if (download.state === 'complete') {
               try {
                 await uploadCompanyFile(download.filename, companyId, email);
@@ -1910,7 +1901,7 @@ async function checkForRecentDownloads(companyId, email) {
           }
         }
       }
-      
+
       reject(new Error('No recent company analytics downloads found'));
     });
   });
@@ -1927,7 +1918,7 @@ function findAndClickCompanyExportButton() {
     'Exportar',    // Spanish
     'Exporter'     // French
   ];
-  
+
   // Try different selectors
   const selectors = [
     'button',
@@ -1935,12 +1926,12 @@ function findAndClickCompanyExportButton() {
     '.artdeco-button',
     'a'
   ];
-  
+
   for (const selector of selectors) {
     const elements = document.querySelectorAll(selector);
     for (const element of elements) {
       const text = element.textContent?.trim();
-      if (text && exportTexts.some(exportText => 
+      if (text && exportTexts.some(exportText =>
         text.toLowerCase().includes(exportText.toLowerCase())
       )) {
         console.log(`Found company export button with text: ${text}`);
@@ -1949,7 +1940,7 @@ function findAndClickCompanyExportButton() {
       }
     }
   }
-  
+
   console.log('Company export button not found');
   return false;
 }
@@ -1959,7 +1950,7 @@ function findAndClickCompanyExportButton() {
  */
 function findAndClickSecondExportButton() {
   console.log('Looking for second export button in popup/modal...');
-  
+
   // Multi-language export button texts
   const exportTexts = [
     'Export',      // English
@@ -1967,7 +1958,7 @@ function findAndClickSecondExportButton() {
     'Exportar',    // Spanish
     'Exporter'     // French
   ];
-  
+
   // Look for modal/popup containers first
   const modalSelectors = [
     '[role="dialog"]',
@@ -1978,18 +1969,18 @@ function findAndClickSecondExportButton() {
     '.artdeco-modal',
     '.artdeco-dropdown-content'
   ];
-  
+
   // First try to find buttons within modal containers
   for (const modalSelector of modalSelectors) {
     const modals = document.querySelectorAll(modalSelector);
     for (const modal of modals) {
       if (modal.offsetParent !== null) { // Check if modal is visible
         console.log(`Found visible modal: ${modalSelector}`);
-        
+
         const buttons = modal.querySelectorAll('button, [role="button"], .artdeco-button, a');
         for (const button of buttons) {
           const text = button.textContent?.trim();
-          if (text && exportTexts.some(exportText => 
+          if (text && exportTexts.some(exportText =>
             text.toLowerCase().includes(exportText.toLowerCase())
           )) {
             console.log(`Found second export button in modal with text: ${text}`);
@@ -2000,13 +1991,13 @@ function findAndClickSecondExportButton() {
       }
     }
   }
-  
+
   // If no modal found, look for any visible export buttons that might have appeared
   const allButtons = document.querySelectorAll('button, [role="button"], .artdeco-button, a');
   for (const button of allButtons) {
     if (button.offsetParent !== null) { // Check if button is visible
       const text = button.textContent?.trim();
-      if (text && exportTexts.some(exportText => 
+      if (text && exportTexts.some(exportText =>
         text.toLowerCase().includes(exportText.toLowerCase())
       )) {
         // Make sure this is not the same button we clicked before
@@ -2019,7 +2010,7 @@ function findAndClickSecondExportButton() {
       }
     }
   }
-  
+
   console.log('Second export button not found in popup/modal');
   return false;
 }
@@ -2029,7 +2020,7 @@ function findAndClickSecondExportButton() {
  */
 function findAndClickAlternativeExportButton() {
   console.log('Looking for alternative export/download buttons...');
-  
+
   // Alternative texts that might appear
   const alternativeTexts = [
     'Download',
@@ -2043,20 +2034,20 @@ function findAndClickAlternativeExportButton() {
     'Guardar',       // Spanish Save
     'Enregistrer'    // French Save
   ];
-  
+
   // Look for any clickable elements with alternative texts
   const clickableElements = document.querySelectorAll('button, [role="button"], .artdeco-button, a, span[role="button"]');
-  
+
   for (const element of clickableElements) {
     if (element.offsetParent !== null) { // Check if element is visible
       const text = element.textContent?.trim();
       const ariaLabel = element.getAttribute('aria-label');
       const title = element.getAttribute('title');
-      
+
       // Check text content, aria-label, and title
       const textToCheck = [text, ariaLabel, title].filter(Boolean).join(' ').toLowerCase();
-      
-      if (alternativeTexts.some(altText => 
+
+      if (alternativeTexts.some(altText =>
         textToCheck.includes(altText.toLowerCase())
       )) {
         console.log(`Found alternative export button with text: ${text || ariaLabel || title}`);
@@ -2065,7 +2056,7 @@ function findAndClickAlternativeExportButton() {
       }
     }
   }
-  
+
   // Last resort: look for any button that might trigger a download
   const downloadLinks = document.querySelectorAll('a[download], a[href*="download"], a[href*="export"]');
   for (const link of downloadLinks) {
@@ -2075,7 +2066,7 @@ function findAndClickAlternativeExportButton() {
       return true;
     }
   }
-  
+
   console.log('No alternative export buttons found');
   return false;
 }
@@ -2089,7 +2080,7 @@ function findAndClickAlternativeExportButton() {
 async function uploadCompanyFile(filename, companyId, email) {
   return new Promise((resolve, reject) => {
     // Search for the downloaded file
-    chrome.downloads.search({ 
+    chrome.downloads.search({
       filename: filename,
       orderBy: ['-startTime'],
       limit: 1
@@ -2098,72 +2089,72 @@ async function uploadCompanyFile(filename, companyId, email) {
         reject(new Error('Company analytics file not found'));
         return;
       }
-      
+
       const download = downloads[0];
       Logger.log(`Found company analytics file: ${download.filename}`);
-      
+
       try {
         // Get the download URL - LinkedIn provides direct download URLs
         const downloadUrl = download.url;
-        
+
         if (!downloadUrl) {
           reject(new Error('Download URL not available'));
           return;
         }
-        
+
         Logger.log(`Fetching company file from URL: ${downloadUrl}`);
-        
+
         // Fetch the file content
         const response = await fetch(downloadUrl);
-        
+
         if (!response.ok) {
           reject(new Error(`Failed to fetch company file: ${response.status}`));
           return;
         }
-        
+
         // Get the file as blob
         const fileBlob = await response.blob();
-        
+
         // Convert to base64
         const reader = new FileReader();
         reader.onload = async function() {
           try {
             const base64Data = reader.result.split(',')[1]; // Remove data:... prefix
-            
+
             // Validate required parameters
             if (!companyId) {
               reject(new Error('Company ID is missing or empty'));
               return;
             }
-            
+
             if (!email) {
               reject(new Error('User email is missing or empty'));
               return;
             }
-            
+
             if (!base64Data) {
               reject(new Error('File data is missing or empty'));
               return;
             }
-            
+
             // Extract just the filename from the full path (handle both Windows and Unix paths)
             let justFilename = download.filename;
-            
+
             // Debug: Log the original filename
             console.log(`[DEBUG] Original filename: "${download.filename}"`);
-            
+
             // Handle Windows paths (C:\Users\...)
             if (justFilename.includes('\\')) {
               justFilename = justFilename.split('\\').pop();
               console.log(`[DEBUG] After Windows split: "${justFilename}"`);
             }
-            
+
             // Handle Unix paths (/home/user/...)
             if (justFilename.includes('/')) {
               justFilename = justFilename.split('/').pop();
               console.log(`[DEBUG] After Unix split: "${justFilename}"`);
             }
-            
+
             // Fallback if extraction failed
             if (!justFilename || justFilename === download.filename) {
               // Try to extract from the end of the path using regex
@@ -2171,9 +2162,9 @@ async function uploadCompanyFile(filename, companyId, email) {
               justFilename = match ? match[0] : 'company_analytics.xls';
               console.log(`[DEBUG] After regex fallback: "${justFilename}"`);
             }
-            
+
             console.log(`[DEBUG] Final filename: "${justFilename}"`);
-            
+
             // Prepare the payload for the company API
             const payload = {
               company_id: String(companyId), // Ensure it's a string
@@ -2181,9 +2172,9 @@ async function uploadCompanyFile(filename, companyId, email) {
               file: base64Data,
               file_name: justFilename
             };
-            
+
             Logger.log(`Uploading company analytics file for company ${companyId}`);
-            
+
             // Upload to company API endpoint
             const uploadResponse = await fetch('https://sn6ujdpryv35cap42dqlgmyybe0wsxso.lambda-url.us-east-1.on.aws/', {
               method: 'POST',
@@ -2192,7 +2183,7 @@ async function uploadCompanyFile(filename, companyId, email) {
               },
               body: JSON.stringify(payload)
             });
-            
+
             if (uploadResponse.ok) {
               const responseData = await uploadResponse.json();
               Logger.log('Company analytics file uploaded successfully');
@@ -2206,13 +2197,13 @@ async function uploadCompanyFile(filename, companyId, email) {
             reject(new Error(`Company file processing error: ${error.message}`));
           }
         };
-        
+
         reader.onerror = () => {
           reject(new Error('Failed to read company analytics file'));
         };
-        
+
         reader.readAsDataURL(fileBlob);
-        
+
       } catch (error) {
         reject(new Error(`Error processing company analytics file: ${error.message}`));
       }
@@ -2230,7 +2221,7 @@ async function updateCompanyExecutionStatus(status, error = null) {
     lastCompanyExecutionStatus: status,
     lastCompanyExecutionTime: Date.now()
   };
-  
+
   if (error) {
     updateData.lastCompanyExecutionError = JSON.stringify({
       name: error.name,
@@ -2241,7 +2232,7 @@ async function updateCompanyExecutionStatus(status, error = null) {
     // Clear previous error if successful
     chrome.storage.local.remove(['lastCompanyExecutionError']);
   }
-  
+
   chrome.storage.local.set(updateData);
   Logger.log(`Company execution status updated: ${status}`);
 }
@@ -2254,11 +2245,22 @@ async function updateCompanyExecutionStatus(status, error = null) {
  * Manages Chrome alarms for scheduling tasks
  */
 const AlarmManager = {
+  // Flags to prevent duplicate setups
+  _initialAlarmSetup: false,
+  _watchdogAlarmSetup: false,
+  _listenersInitialized: false,
+
   /**
    * Set up the initial alarm
    * @returns {Promise<void>}
    */
   setupInitialAlarm: async function() {
+    if (this._initialAlarmSetup) {
+      Logger.log("Initial alarm already set up, skipping duplicate setup");
+      return;
+    }
+    this._initialAlarmSetup = true;
+    
     await initializeExecutionInterval();
 
     chrome.storage.local.get("nextExecution", (data) => {
@@ -2301,7 +2303,7 @@ const AlarmManager = {
     // Run the watchdog more frequently (every 1 minute) to catch missed retries
     chrome.alarms.create(CONFIG.ALARMS.WATCHDOG, { periodInMinutes: 1 });
     Logger.log("Watchdog alarm set to run every minute");
-    
+
     // Mark alarms as enabled
     chrome.storage.local.set({ alarmsEnabled: true });
     Logger.log("Alarms marked as enabled in storage");
@@ -2420,7 +2422,7 @@ const AlarmManager = {
         // Clear the retry scheduled flag immediately to prevent duplicate executions
         chrome.storage.local.set({ retryScheduled: false }, () => {
           Logger.log('Retry scheduled flag cleared, proceeding with execution');
-          
+
           // Run the automation script with error handling
           try {
             Logger.log('Starting automation script from retry handler');
@@ -2463,7 +2465,7 @@ function setupRuntimeListeners() {
         Logger.log('Company automation already running, ignoring manual request');
         return;
       }
-      
+
       Logger.log(`Manual company execution triggered for company ID: ${message.companyId}`);
       runCompanyPageAutomation(message.companyId);
     }
@@ -2490,27 +2492,32 @@ function setupRuntimeListeners() {
   });
 
   // Handle browser startup and extension installation
-  // Handle browser startup and extension installation
-  chrome.runtime.onInstalled.addListener(() => {
-    // Explicitly set alarmsEnabled flag immediately on installation
-    chrome.storage.local.set({ alarmsEnabled: true }, () => {
-      Logger.log("alarmsEnabled flag set to true on installation");
-    });
+  chrome.runtime.onInstalled.addListener((details) => {
+    Logger.log(`Extension installed/updated. Reason: ${details.reason}`);
     
-    AlarmManager.setupInitialAlarm();
-    AlarmManager.setupWatchdogAlarm();
-    AlarmManager.initializeAlarmListeners();
+    // Only run full initialization on install, not on updates
+    if (details.reason === 'install') {
+      Logger.log("First-time installation detected, running safe initialization");
+      safeInitializeExtension();
+    } else {
+      Logger.log("Extension update detected, skipping duplicate initialization");
+      // Just ensure alarms are enabled
+      chrome.storage.local.set({ alarmsEnabled: true }, () => {
+        Logger.log("alarmsEnabled flag set to true after update");
+      });
+    }
   });
 
   chrome.runtime.onStartup.addListener(() => {
-    // Explicitly set alarmsEnabled flag immediately on browser startup
+    Logger.log("Browser startup detected");
+    // Only set the flag, don't re-initialize everything
     chrome.storage.local.set({ alarmsEnabled: true }, () => {
       Logger.log("alarmsEnabled flag set to true on browser startup");
     });
     
+    // Ensure alarms are still active (they might have been cleared)
     AlarmManager.setupInitialAlarm();
     AlarmManager.setupWatchdogAlarm();
-    AlarmManager.initializeAlarmListeners();
   });
 
   // Handle system idle state changes
@@ -2532,22 +2539,39 @@ function setupRuntimeListeners() {
 async function initializeExtension() {
   await initializeExecutionInterval();
   setupRuntimeListeners();
-  
+
   // Set up alarms and mark them as enabled
   AlarmManager.setupInitialAlarm();
   AlarmManager.setupWatchdogAlarm();
   AlarmManager.initializeAlarmListeners();
-  
+
   // Explicitly set alarmsEnabled flag
   chrome.storage.local.set({ alarmsEnabled: true });
   Logger.log("Extension initialized with alarms enabled");
 }
 
-// Initialize the extension
-initializeExtension();
+// Global flag to prevent multiple initializations
+let extensionInitialized = false;
+
+/**
+ * Safe initialization wrapper to prevent duplicate initialization
+ */
+async function safeInitializeExtension() {
+  if (extensionInitialized) {
+    Logger.log("Extension already initialized, skipping duplicate initialization");
+    return;
+  }
+  
+  extensionInitialized = true;
+  Logger.log("Starting extension initialization...");
+  await initializeExtension();
+}
+
+// Initialize the extension only once
+safeInitializeExtension();
 /**
  * Professional Profile Analytics - Shiny App Integration
- * 
+ *
  * This script handles the integration with Shiny web applications,
  * allowing them to trigger LinkedIn post creation with human-like typing.
  */
@@ -2562,7 +2586,7 @@ const DEBUG_MODE = true;
 // Debug logging function
 function debugLog(message, data = null) {
   if (!DEBUG_MODE) return;
-  
+
   const timestamp = new Date().toISOString();
   console.log(`[PPA-DEBUG ${timestamp}] ${message}`);
   if (data) {
@@ -2579,30 +2603,30 @@ chrome.runtime.onMessageExternal.addListener(
   function(request, sender, sendResponse) {
     debugLog("Message received from external source:", request);
     debugLog("Sender:", sender);
-    
+
     if (request.action === "openTabAndType") {
       debugLog("Processing openTabAndType action");
-      
+
       // Open a new tab with the specified URL
       chrome.tabs.create({ url: request.url || "https://www.linkedin.com/feed/" }, function(tab) {
         debugLog("Created new tab:", tab);
-        
+
         // We need to wait for the tab to fully load before injecting our content script
         chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo) {
           debugLog(`Tab ${tabId} update:`, changeInfo);
-          
+
           if (tabId === tab.id && changeInfo.status === 'complete') {
             // Remove the listener to avoid multiple executions
             chrome.tabs.onUpdated.removeListener(listener);
             debugLog("Tab fully loaded, proceeding with script injection");
-            
+
             // First inject the LinkedIn post helper script with human-like typing
             chrome.scripting.executeScript({
               target: { tabId: tab.id },
               files: ['linkedin-post-helper-typing.js']
             }, (injectionResults) => {
               debugLog("Helper script injection results:", injectionResults);
-              
+
               // Then execute the script to create a post
               chrome.scripting.executeScript({
                 target: { tabId: tab.id },
@@ -2610,22 +2634,22 @@ chrome.runtime.onMessageExternal.addListener(
                 args: [request.text, request.delay || 100, request.autoSubmit || false]
               }, (results) => {
                 debugLog("Post creation script execution results:", results);
-                
+
                 // Send response back to the web page
                 if (results && results[0] && results[0].result && results[0].result.success) {
                   debugLog("Sending success response to Shiny app");
-                  sendResponse({ 
-                    success: true, 
-                    message: "LinkedIn post created successfully" 
+                  sendResponse({
+                    success: true,
+                    message: "LinkedIn post created successfully"
                   });
                 } else {
-                  const errorMessage = results && results[0] && results[0].result ? 
-                    results[0].result.message : 
+                  const errorMessage = results && results[0] && results[0].result ?
+                    results[0].result.message :
                     "Failed to create LinkedIn post";
-                  
+
                   debugLog("Sending error response to Shiny app:", errorMessage);
-                  sendResponse({ 
-                    success: false, 
+                  sendResponse({
+                    success: false,
                     message: errorMessage
                   });
                 }
@@ -2634,7 +2658,7 @@ chrome.runtime.onMessageExternal.addListener(
           }
         });
       });
-      
+
       // Return true to indicate we will send a response asynchronously
       return true;
     }
@@ -2649,11 +2673,11 @@ function createLinkedInPost(text, delay, autoSubmit) {
       console.error("LinkedIn post helper not found");
       return { success: false, message: "LinkedIn post helper not found" };
     }
-    
+
     // Use the debug logging function
     window.linkedInPostHelper.debugLog("Starting LinkedIn post creation");
     window.linkedInPostHelper.debugLog("Current URL:", window.location.href);
-    
+
     // Use the LinkedIn post helper functions
     return window.linkedInPostHelper.clickStartPostButton()
       .then(editor => {
@@ -2662,11 +2686,11 @@ function createLinkedInPost(text, delay, autoSubmit) {
       })
       .then(() => {
         window.linkedInPostHelper.debugLog("Text typed successfully");
-        
+
         // If autoSubmit is true, find and click the Post button
         if (autoSubmit) {
           window.linkedInPostHelper.debugLog("Looking for Post button to auto-submit");
-          
+
           // Find the Post button (multi-language support)
           const postButtonSelectors = [
             'button[aria-label="Post"]',
@@ -2674,7 +2698,7 @@ function createLinkedInPost(text, delay, autoSubmit) {
             'button[aria-label="Publicar"]', // Spanish
             'button[aria-label="Publier"]'   // French
           ];
-          
+
           let postButton = null;
           for (const selector of postButtonSelectors) {
             const buttons = document.querySelectorAll(selector);
@@ -2686,7 +2710,7 @@ function createLinkedInPost(text, delay, autoSubmit) {
             }
             if (postButton) break;
           }
-          
+
           // If button not found by aria-label, try by text content
           if (!postButton) {
             const allButtons = document.querySelectorAll('button');
@@ -2698,7 +2722,7 @@ function createLinkedInPost(text, delay, autoSubmit) {
               }
             }
           }
-          
+
           if (postButton) {
             window.linkedInPostHelper.debugLog("Post button found, clicking it");
             postButton.click();
@@ -2708,7 +2732,7 @@ function createLinkedInPost(text, delay, autoSubmit) {
             return { success: true, message: "Post created successfully but not submitted (Post button not found)" };
           }
         }
-        
+
         return { success: true, message: "Post created successfully" };
       })
       .catch(error => {
@@ -2733,7 +2757,7 @@ const AdvancedPostAnalytics = {
    */
   async processAdvancedStatistics(tabId, email, postUrls, logger) {
     logger.log(`Starting advanced post statistics processing for ${postUrls.length} posts`);
-    
+
     const results = {
       processed: 0,
       successful: 0,
@@ -2741,37 +2765,37 @@ const AdvancedPostAnalytics = {
       uploads: [],
       errors: []
     };
-    
+
     try {
       // Process each post URL
       for (let i = 0; i < postUrls.length; i++) {
         const postUrl = postUrls[i];
         logger.log(`Processing post ${i + 1}/${postUrls.length}: ${postUrl}`);
-        
+
         try {
           // Transform URL to analytics format
           const analyticsUrl = this.transformToAnalyticsUrl(postUrl);
-          
+
           // Navigate to the post analytics page
           await this.navigateToPostAnalytics(tabId, analyticsUrl, logger);
-          
+
           // Wait for page to load
           await this.waitForAnalyticsPageLoad(tabId, logger);
-          
+
           // Export the post analytics
           const downloadInfo = await this.exportPostAnalytics(tabId, logger);
-          
+
           if (downloadInfo) {
             // Upload immediately after download
             logger.log(`Uploading analytics for post: ${postUrl}`);
             const uploadResult = await this.uploadSinglePostAnalytics(
-              email, 
-              postUrl, 
-              analyticsUrl, 
-              downloadInfo, 
+              email,
+              postUrl,
+              analyticsUrl,
+              downloadInfo,
               logger
             );
-            
+
             if (uploadResult.success) {
               results.uploads.push({
                 postUrl: postUrl,
@@ -2795,14 +2819,14 @@ const AdvancedPostAnalytics = {
             });
             results.failed++;
           }
-          
+
           results.processed++;
-          
+
           // Add delay between posts to avoid rate limiting
           if (i < postUrls.length - 1) {
             await this.delay(2000 + Math.random() * 3000); // 2-5 second delay
           }
-          
+
         } catch (error) {
           logger.error(`Failed to process post ${postUrl}: ${error.message}`);
           results.errors.push({
@@ -2812,10 +2836,10 @@ const AdvancedPostAnalytics = {
           results.failed++;
         }
       }
-      
+
       logger.log(`Advanced post statistics processing completed. Processed: ${results.processed}, Successful: ${results.successful}, Failed: ${results.failed}`);
       return results;
-      
+
     } catch (error) {
       logger.error(`Advanced post statistics processing failed: ${error.message}`);
       throw error;
@@ -2831,34 +2855,34 @@ const AdvancedPostAnalytics = {
     try {
       // Extract the activity URN from various LinkedIn post URL formats
       let activityUrn = null;
-      
+
       // Format 1: https://www.linkedin.com/posts/username_activity-7341072233987026944-abcd
       const postsMatch = postUrl.match(/\/posts\/[^_]+_activity-(\d+)-/);
       if (postsMatch) {
         activityUrn = postsMatch[1];
       }
-      
+
       // Format 2: https://www.linkedin.com/feed/update/urn:li:activity:7341072233987026944/
       const feedMatch = postUrl.match(/\/feed\/update\/urn:li:activity:(\d+)/);
       if (feedMatch) {
         activityUrn = feedMatch[1];
       }
-      
+
       // Format 3: Direct activity ID in URL
       const activityMatch = postUrl.match(/activity[:-](\d{19})/);
       if (activityMatch) {
         activityUrn = activityMatch[1];
       }
-      
+
       if (!activityUrn) {
         throw new Error(`Could not extract activity URN from URL: ${postUrl}`);
       }
-      
+
       // Transform to analytics URL format
       const analyticsUrl = `https://www.linkedin.com/analytics/post-summary/urn:li:activity:${activityUrn}/`;
-      
+
       return analyticsUrl;
-      
+
     } catch (error) {
       throw new Error(`Error transforming URL ${postUrl}: ${error.message}`);
     }
@@ -2877,7 +2901,7 @@ const AdvancedPostAnalytics = {
           reject(new Error(`Failed to navigate to analytics page: ${chrome.runtime.lastError.message}`));
           return;
         }
-        
+
         logger.log(`Navigated to analytics page: ${analyticsUrl}`);
         resolve();
       });
@@ -2892,7 +2916,7 @@ const AdvancedPostAnalytics = {
   async waitForAnalyticsPageLoad(tabId, logger) {
     const maxWait = 15000; // 15 seconds
     const startTime = Date.now();
-    
+
     return new Promise((resolve, reject) => {
       const checkInterval = setInterval(() => {
         if (Date.now() - startTime > maxWait) {
@@ -2900,14 +2924,14 @@ const AdvancedPostAnalytics = {
           reject(new Error('Analytics page load timeout'));
           return;
         }
-        
+
         chrome.scripting.executeScript({
           target: { tabId },
           func: () => {
             // Check if the analytics page has loaded
             const exportButton = document.querySelector('button[data-test-id="export-button"], button:contains("Export"), button[aria-label*="Export"]');
             const loadingIndicator = document.querySelector('[data-test-id="loading"], .loading, .spinner');
-            
+
             return {
               hasExportButton: !!exportButton,
               isLoading: !!loadingIndicator,
@@ -2920,10 +2944,10 @@ const AdvancedPostAnalytics = {
             reject(new Error(`Script execution failed: ${chrome.runtime.lastError.message}`));
             return;
           }
-          
+
           if (results && results[0] && results[0].result) {
             const { hasExportButton, isLoading, readyState } = results[0].result;
-            
+
             if (readyState === 'complete' && hasExportButton && !isLoading) {
               clearInterval(checkInterval);
               logger.log('Analytics page loaded successfully');
@@ -2945,24 +2969,24 @@ const AdvancedPostAnalytics = {
     return new Promise((resolve, reject) => {
       // Track downloads before clicking export
       const downloadsBeforeExport = [];
-      
+
       chrome.downloads.search({ limit: 10 }, (items) => {
         items.forEach(item => downloadsBeforeExport.push(item.id));
-        
+
         // Click the export button using the existing MultilingualTabInteractions
         MultilingualTabInteractions.clickButton(tabId, 'export')
           .then(() => {
             logger.log('Export button clicked successfully');
-            
+
             // Wait for download to start
             setTimeout(() => {
               chrome.downloads.search({ limit: 10 }, (newItems) => {
-                const newDownloads = newItems.filter(item => 
-                  !downloadsBeforeExport.includes(item.id) && 
-                  (item.filename.toLowerCase().includes('post') || 
+                const newDownloads = newItems.filter(item =>
+                  !downloadsBeforeExport.includes(item.id) &&
+                  (item.filename.toLowerCase().includes('post') ||
                    item.filename.toLowerCase().includes('analytics'))
                 );
-                
+
                 if (newDownloads.length > 0) {
                   const downloadInfo = newDownloads[0];
                   logger.log(`Post analytics download detected: ${downloadInfo.filename}`);
@@ -2971,10 +2995,10 @@ const AdvancedPostAnalytics = {
                   // Wait a bit more for the download
                   setTimeout(() => {
                     chrome.downloads.search({ limit: 10 }, (finalItems) => {
-                      const finalNewDownloads = finalItems.filter(item => 
+                      const finalNewDownloads = finalItems.filter(item =>
                         !downloadsBeforeExport.includes(item.id)
                       );
-                      
+
                       if (finalNewDownloads.length > 0) {
                         resolve(finalNewDownloads[0]);
                       } else {
@@ -3004,10 +3028,10 @@ const AdvancedPostAnalytics = {
    */
   async uploadSinglePostAnalytics(email, originalUrl, analyticsUrl, downloadInfo, logger) {
     const API_ENDPOINT = 'https://mlew54d2u3dfar47trgs2rjjgi0vfopc.lambda-url.us-east-1.on.aws/';
-    
+
     try {
       logger.log(`Uploading single post analytics: ${downloadInfo.filename}`);
-      
+
       // Get the file from the download URL
       let fileBase64 = null;
       try {
@@ -3030,13 +3054,13 @@ const AdvancedPostAnalytics = {
         logger.warn(`Failed to get file ${downloadInfo.filename}: ${fileError.message}`);
         return { success: false, error: fileError.message };
       }
-      
+
       // Prepare the simple JSON payload as expected by Python Lambda
       const payload = {
         user_email: email,
         file: fileBase64
       };
-      
+
       // Upload to API with JSON payload
       logger.log(`Uploading to endpoint: ${API_ENDPOINT}`);
       const response = await fetch(API_ENDPOINT, {
@@ -3046,17 +3070,17 @@ const AdvancedPostAnalytics = {
         },
         body: JSON.stringify(payload)
       });
-      
+
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`Upload failed with status ${response.status}: ${errorText}`);
       }
-      
+
       const result = await response.json();
       logger.log(`Single post analytics uploaded successfully: ${downloadInfo.filename}`);
-      
+
       return { success: true, result: result };
-      
+
     } catch (error) {
       logger.error(`Failed to upload single post analytics: ${error.message}`);
       return { success: false, error: error.message };
