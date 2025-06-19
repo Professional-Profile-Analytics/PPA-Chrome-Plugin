@@ -3072,20 +3072,24 @@ const AdvancedPostAnalytics = {
         return { success: false, error: fileError.message };
       }
 
-      // Prepare the simple JSON payload as expected by Python Lambda
-      const payload = {
-        user_email: email,
-        file: fileBase64
-      };
-
-      // Upload to API with JSON payload
+      // Prepare FormData for Lambda (same format as main upload)
+      const formData = new FormData();
+      formData.append('Email', email);
+      
+      // Convert base64 back to blob for FormData
+      const binaryString = atob(fileBase64);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const fileBlob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      formData.append('xlsx', fileBlob, downloadInfo.filename);
+      
+      // Upload to API with FormData (same as main upload)
       logger.log(`Uploading to endpoint: ${API_ENDPOINT}`);
       const response = await fetch(API_ENDPOINT, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
+        body: formData
       });
 
       if (!response.ok) {
