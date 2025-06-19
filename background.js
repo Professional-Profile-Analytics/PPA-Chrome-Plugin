@@ -732,11 +732,17 @@ const LinkedInMultilingualAutomation = {
         logger.warn(`Failed to process ${results.failed} posts. Check logs for details.`);
       }
       
+      // Return the results so they can be used for success message
+      return results;
+      
     } catch (error) {
       logger.error(`Advanced post statistics processing failed: ${error.message}`);
       // Don't throw the error - we don't want to fail the main automation
       // if advanced statistics fail
       logger.log('Continuing with main automation despite advanced statistics failure');
+      
+      // Return null results on error
+      return null;
     }
   },
 
