@@ -2880,82 +2880,93 @@ const AdvancedPostAnalytics = {
               const currentPostIdMatch = analyticsUrl.match(/urn:li:activity:(\d+)/);
               const currentPostId = currentPostIdMatch ? currentPostIdMatch[1] : null;
               
-              chrome.downloads.search({ limit: 10 }, (newItems) => {
-                // First priority: PostAnalytics files with matching post_id
-                let newDownloads = newItems.filter(item =>
-                  !downloadsBeforeExport.includes(item.id) &&
-                  item.filename.endsWith('.xlsx') &&
-                  item.filename.toLowerCase().includes('postanalytics') &&
-                  (currentPostId ? item.filename.includes(currentPostId) : true)
-                );
+              logger.log(`Looking for PostAnalytics file with post_id: ${currentPostId}`);
+              
+              chrome.downloads.search({ limit: 15 }, (newItems) => {
+                // STRICT: Only PostAnalytics files with matching post_id
+                let newDownloads = newItems.filter(item => {
+                  const isNewDownload = !downloadsBeforeExport.includes(item.id);
+                  const isXlsx = item.filename.endsWith('.xlsx');
+                  const isPostAnalytics = item.filename.toLowerCase().includes('postanalytics');
+                  const hasMatchingPostId = currentPostId ? item.filename.includes(currentPostId) : false;
+                  
+                  logger.log(`Checking download: ${item.filename} - New: ${isNewDownload}, XLSX: ${isXlsx}, PostAnalytics: ${isPostAnalytics}, MatchingID: ${hasMatchingPostId}`);
+                  
+                  return isNewDownload && isXlsx && isPostAnalytics && hasMatchingPostId;
+                });
 
-                // Second priority: PostAnalytics files (any post_id)
+                // Fallback: PostAnalytics files (any post_id) - but still require PostAnalytics
                 if (newDownloads.length === 0) {
-                  newDownloads = newItems.filter(item =>
-                    !downloadsBeforeExport.includes(item.id) &&
-                    item.filename.endsWith('.xlsx') &&
-                    item.filename.toLowerCase().includes('postanalytics')
-                  );
-                }
-
-                // Third priority: Any analytics-related .xlsx file
-                if (newDownloads.length === 0) {
-                  newDownloads = newItems.filter(item =>
-                    !downloadsBeforeExport.includes(item.id) &&
-                    item.filename.endsWith('.xlsx') &&
-                    (item.filename.toLowerCase().includes('analytics') ||
-                     item.filename.toLowerCase().includes('post_analytics'))
-                  );
+                  logger.log('No exact match found, looking for any PostAnalytics file...');
+                  newDownloads = newItems.filter(item => {
+                    const isNewDownload = !downloadsBeforeExport.includes(item.id);
+                    const isXlsx = item.filename.endsWith('.xlsx');
+                    const isPostAnalytics = item.filename.toLowerCase().includes('postanalytics');
+                    
+                    logger.log(`Fallback check: ${item.filename} - New: ${isNewDownload}, XLSX: ${isXlsx}, PostAnalytics: ${isPostAnalytics}`);
+                    
+                    return isNewDownload && isXlsx && isPostAnalytics;
+                  });
                 }
 
                 if (newDownloads.length > 0) {
                   const downloadInfo = newDownloads[0];
-                  logger.log(`Post analytics download detected: ${downloadInfo.filename}`);
+                  logger.log(`✓ PostAnalytics download detected: ${downloadInfo.filename}`);
                   
                   // Validate the file matches our criteria
-                  const filename = downloadInfo.filename.toLowerCase();
-                  if (filename.includes('postanalytics') && currentPostId && !downloadInfo.filename.includes(currentPostId)) {
+                  if (currentPostId && !downloadInfo.filename.includes(currentPostId)) {
                     logger.warn(`Warning: PostAnalytics file found but post_id mismatch. Expected: ${currentPostId}, File: ${downloadInfo.filename}`);
+                  } else {
+                    logger.log(`✓ Perfect match: PostAnalytics file with correct post_id`);
                   }
                   
                   resolve(downloadInfo);
                 } else {
-                  // Wait longer for the download (Chrome might be blocking)
+                  logger.log('No PostAnalytics file found in first attempt, waiting longer...');
+                  
+                  // Wait longer for the download - but STILL require PostAnalytics
                   setTimeout(() => {
-                    chrome.downloads.search({ limit: 10 }, (finalItems) => {
-                      // Apply same filtering logic for extended wait
-                      let finalNewDownloads = finalItems.filter(item =>
-                        !downloadsBeforeExport.includes(item.id) &&
-                        item.filename.endsWith('.xlsx') &&
-                        item.filename.toLowerCase().includes('postanalytics')
-                      );
-
-                      if (finalNewDownloads.length === 0) {
-                        finalNewDownloads = finalItems.filter(item =>
-                          !downloadsBeforeExport.includes(item.id) &&
-                          item.filename.endsWith('.xlsx')
-                        );
-                      }
+                    chrome.downloads.search({ limit: 15 }, (finalItems) => {
+                      // STILL STRICT: Only PostAnalytics files
+                      let finalNewDownloads = finalItems.filter(item => {
+                        const isNewDownload = !downloadsBeforeExport.includes(item.id);
+                        const isXlsx = item.filename.endsWith('.xlsx');
+                        const isPostAnalytics = item.filename.toLowerCase().includes('postanalytics');
+                        
+                        logger.log(`Extended check: ${item.filename} - New: ${isNewDownload}, XLSX: ${isXlsx}, PostAnalytics: ${isPostAnalytics}`);
+                        
+                        return isNewDownload && isXlsx && isPostAnalytics;
+                      });
 
                       if (finalNewDownloads.length > 0) {
-                        logger.log(`Download detected after extended wait: ${finalNewDownloads[0].filename}`);
+                        logger.log(`✓ PostAnalytics download detected after extended wait: ${finalNewDownloads[0].filename}`);
                         resolve(finalNewDownloads[0]);
                       } else {
-                        // One more attempt with even longer wait
+                        logger.log('Still no PostAnalytics file, final attempt...');
+                        
+                        // Final attempt - STILL require PostAnalytics (no generic .xlsx fallback)
                         setTimeout(() => {
-                          chrome.downloads.search({ limit: 15 }, (veryFinalItems) => {
-                            const veryFinalNewDownloads = veryFinalItems.filter(item =>
-                              !downloadsBeforeExport.includes(item.id) &&
-                              item.filename.endsWith('.xlsx')
-                            );
+                          chrome.downloads.search({ limit: 20 }, (veryFinalItems) => {
+                            const veryFinalNewDownloads = veryFinalItems.filter(item => {
+                              const isNewDownload = !downloadsBeforeExport.includes(item.id);
+                              const isXlsx = item.filename.endsWith('.xlsx');
+                              const isPostAnalytics = item.filename.toLowerCase().includes('postanalytics');
+                              
+                              logger.log(`Final check: ${item.filename} - New: ${isNewDownload}, XLSX: ${isXlsx}, PostAnalytics: ${isPostAnalytics}`);
+                              
+                              return isNewDownload && isXlsx && isPostAnalytics;
+                            });
 
                             if (veryFinalNewDownloads.length > 0) {
-                              logger.log(`Download detected after very extended wait: ${veryFinalNewDownloads[0].filename}`);
-                              logger.warn(`Final attempt file may not be PostAnalytics: ${veryFinalNewDownloads[0].filename}`);
+                              logger.log(`✓ PostAnalytics download detected after final wait: ${veryFinalNewDownloads[0].filename}`);
                               resolve(veryFinalNewDownloads[0]);
                             } else {
-                              logger.warn('No .xlsx download detected after multiple attempts - Chrome may be blocking downloads');
-                              reject(new Error('No .xlsx download detected after export - Chrome download blocking detected'));
+                              logger.error('❌ No PostAnalytics file detected after multiple attempts');
+                              logger.log('Available new downloads:');
+                              veryFinalItems.filter(item => !downloadsBeforeExport.includes(item.id))
+                                .forEach(item => logger.log(`  - ${item.filename}`));
+                              
+                              reject(new Error('No PostAnalytics file detected after export - only PostAnalytics files are accepted'));
                             }
                           });
                         }, 5000); // Additional 5 second wait
