@@ -135,7 +135,7 @@ function updateNextExecutionDisplay(interval) {
   chrome.storage.local.set({ nextExecution: nextExecution.getTime() });
 
   // Update the display
-  nextExecutionElement.textContent = `The next execution is scheduled for: ${nextExecution.toLocaleString()}`;
+  nextExecutionElement.textContent = nextExecution.toLocaleString();
 }
 
 //
@@ -185,7 +185,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Show next execution time
     if (data.nextExecution) {
         const nextExecution = new Date(data.nextExecution);
-        nextExecutionElement.textContent = `The next execution is scheduled for: ${nextExecution.toLocaleString()}`;
+        nextExecutionElement.textContent = nextExecution.toLocaleString();
     } else {
         nextExecutionElement.textContent = "No execution scheduled yet.";
     }
@@ -242,18 +242,18 @@ function updateCompanyExecutionDisplays() {
         // Show next company execution time
         if (data.nextCompanyExecution) {
             const nextExecution = new Date(data.nextCompanyExecution);
-            nextCompanyExecutionElement.textContent = `Next company upload: ${nextExecution.toLocaleString()}`;
+            nextCompanyExecutionElement.textContent = nextExecution.toLocaleString();
         } else {
             // Calculate next execution (weekly from now)
             const nextWeek = new Date();
             nextWeek.setDate(nextWeek.getDate() + 7);
-            nextCompanyExecutionElement.textContent = `Next company upload: ${nextWeek.toLocaleString()} (estimated)`;
+            nextCompanyExecutionElement.textContent = `${nextWeek.toLocaleString()} (estimated)`;
         }
 
         // Show last company execution time and status
         if (data.lastCompanyExecutionTime) {
             const lastExecutionTime = new Date(data.lastCompanyExecutionTime);
-            let statusMessage = `Last company upload: ${lastExecutionTime.toLocaleString()} - Status: ${data.lastCompanyExecutionStatus || 'Unknown'}`;
+            let statusMessage = `${lastExecutionTime.toLocaleString()} - Status: ${data.lastCompanyExecutionStatus || 'Unknown'}`;
 
             if (data.lastCompanyExecutionError) {
                 try {
@@ -266,7 +266,7 @@ function updateCompanyExecutionDisplays() {
 
             lastCompanyExecutionElement.innerHTML = statusMessage;
         } else {
-            lastCompanyExecutionElement.textContent = "No company upload has run yet.";
+            lastCompanyExecutionElement.textContent = "No upload has run yet.";
         }
     });
 }
