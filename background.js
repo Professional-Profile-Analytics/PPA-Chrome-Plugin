@@ -3072,9 +3072,16 @@ const AdvancedPostAnalytics = {
         return { success: false, error: fileError.message };
       }
 
+      // Extract post_id from analytics URL
+      const postIdMatch = analyticsUrl.match(/urn:li:activity:(\d+)/);
+      const postId = postIdMatch ? postIdMatch[1] : 'unknown';
+      
       // Prepare FormData for Lambda (same format as main upload)
       const formData = new FormData();
       formData.append('Email', email);
+      formData.append('post_id', postId);
+      formData.append('filename', downloadInfo.filename);
+      formData.append('analytics_url', analyticsUrl);
       
       // Convert base64 back to blob for FormData
       const binaryString = atob(fileBase64);
@@ -3084,6 +3091,8 @@ const AdvancedPostAnalytics = {
       }
       const fileBlob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       formData.append('xlsx', fileBlob, downloadInfo.filename);
+      
+      logger.log(`Uploading post analytics - Post ID: ${postId}, Filename: ${downloadInfo.filename}`);
       
       // Upload to API with FormData (same as main upload)
       logger.log(`Uploading to endpoint: ${API_ENDPOINT}`);
