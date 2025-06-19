@@ -2874,87 +2874,111 @@ const AdvancedPostAnalytics = {
   },
 
   /**
-   * Export post analytics data
+   * Export post analytics data with URL tracking (same as main download)
    * @param {number} tabId - Tab ID
    * @param {string} analyticsUrl - Analytics URL for post_id extraction
    * @param {Object} logger - Logger instance
-   * @returns {Promise<Object>} Download information
+   * @returns {Promise<Object>} Download information with URL
    */
   async exportPostAnalytics(tabId, analyticsUrl, logger) {
     return new Promise((resolve, reject) => {
-      // Track downloads before clicking export
+      // Track downloads before clicking export (same as main download)
       const downloadsBeforeExport = [];
 
       chrome.downloads.search({ limit: 10 }, (items) => {
         items.forEach(item => downloadsBeforeExport.push(item.id));
+
+        // Set up download URL tracking (same as WebRequestTracker)
+        const downloadTracker = this.trackPostAnalyticsDownload(tabId, logger);
 
         // Try multiple approaches to click the export button
         this.tryClickExportButton(tabId, logger)
           .then(() => {
             logger.log('Export button clicked successfully');
             
-            // Validate that export actually triggered by checking for download start
-            const downloadValidationTimeout = setTimeout(() => {
-              logger.warn('Export validation: No immediate download detected, but continuing with extended search...');
-              // Don't reject here, continue with extended detection
-              this.performExtendedDownloadDetection(downloadsBeforeExport, analyticsUrl, logger, resolve, reject);
-            }, 8000); // Reduced from 10 to 8 seconds
-
-            // Wait for download to start - shorter initial wait
-            setTimeout(() => {
-              chrome.downloads.search({ limit: 15 }, (newItems) => {
-                const recentDownloads = newItems.filter(item =>
-                  !downloadsBeforeExport.includes(item.id) &&
-                  item.filename.endsWith('.xlsx')
-                );
-
-                if (recentDownloads.length > 0) {
-                  clearTimeout(downloadValidationTimeout);
-                  logger.log('✅ Export validation successful: Download detected');
-                  
-                  // Extract post_id from URL (this is what we'll send to API)
-                  const currentPostIdMatch = analyticsUrl.match(/urn:li:activity:(\d+)/);
-                  const urlPostId = currentPostIdMatch ? currentPostIdMatch[1] : null;
-                  
-                  logger.log(`🎯 URL post_id: ${urlPostId} - will be sent to API`);
-                  logger.log('Looking for ANY new PostAnalytics file (filename post_id may differ)');
-                  
-                  // Look for ANY new PostAnalytics file (don't match filename post_id)
-                  const postAnalyticsFiles = newItems.filter(item => {
-                    const isNewDownload = !downloadsBeforeExport.includes(item.id);
-                    const isXlsx = item.filename.endsWith('.xlsx');
-                    const isPostAnalytics = item.filename.toLowerCase().includes('postanalytics');
-                    
-                    logger.log(`Quick check: ${item.filename} - New: ${isNewDownload}, XLSX: ${isXlsx}, PostAnalytics: ${isPostAnalytics}`);
-                    
-                    return isNewDownload && isXlsx && isPostAnalytics;
-                  });
-
-                  if (postAnalyticsFiles.length > 0) {
-                    const downloadInfo = postAnalyticsFiles[0];
-                    const filenamePostId = downloadInfo.filename.match(/(\d{19})/);
-                    
-                    logger.log(`✅ NEW PostAnalytics file detected immediately: ${downloadInfo.filename}`);
-                    logger.log(`📊 URL post_id: ${urlPostId} | File post_id: ${filenamePostId ? filenamePostId[1] : 'unknown'}`);
-                    logger.log(`🎯 API will receive URL post_id (${urlPostId}), not filename post_id`);
-                    
-                    resolve(downloadInfo);
-                  } else {
-                    logger.log('PostAnalytics file not found in immediate check, using extended detection...');
-                    clearTimeout(downloadValidationTimeout);
-                    this.performExtendedDownloadDetection(downloadsBeforeExport, analyticsUrl, logger, resolve, reject);
-                  }
-                } else {
-                  logger.log('No .xlsx downloads detected yet, will continue with extended detection...');
-                  // Don't clear timeout here, let it continue to extended detection
-                }
+            // Wait for download URL to be captured (same as main download)
+            downloadTracker
+              .then((downloadUrl) => {
+                logger.log(`✅ Post analytics download URL captured: ${downloadUrl}`);
+                resolve({ url: downloadUrl, source: 'url_tracking' });
+              })
+              .catch((error) => {
+                logger.error(`Download URL tracking failed: ${error.message}`);
+                reject(error);
               });
-            }, 1500); // Reduced from 2000 to 1500ms
           })
           .catch(error => {
             reject(new Error(`Export button click failed: ${error.message}`));
           });
       });
+    });
+  },
+
+  /**
+   * Track post analytics download URL (similar to WebRequestTracker)
+   * @param {number} tabId - Tab ID
+   * @param {Object} logger - Logger instance
+   * @returns {Promise<string>} Download URL
+   */
+  async trackPostAnalyticsDownload(tabId, logger) {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('Download URL tracking timeout'));
+      }, 15000); // 15 second timeout
+
+      // Listen for web requests to capture download URL
+      const requestListener = (details) => {
+        if (details.tabId === tabId && 
+            details.url.includes('linkedin.com') && 
+            (details.url.includes('download') || 
+             details.url.includes('export') ||
+             details.url.includes('.xlsx') ||
+             details.responseHeaders?.some(header => 
+               header.name.toLowerCase() === 'content-disposition' && 
+               header.value.includes('attachment')
+             ))) {
+          
+          logger.log(`📥 Captured post analytics download URL: ${details.url}`);
+          
+          // Clean up
+          clearTimeout(timeout);
+          chrome.webRequest.onBeforeRequest.removeListener(requestListener);
+          chrome.webRequest.onHeadersReceived.removeListener(headerListener);
+          
+          resolve(details.url);
+        }
+      };
+
+      const headerListener = (details) => {
+        if (details.tabId === tabId && 
+            details.responseHeaders?.some(header => 
+              header.name.toLowerCase() === 'content-disposition' && 
+              header.value.includes('attachment')
+            )) {
+          
+          logger.log(`📥 Captured post analytics download URL from headers: ${details.url}`);
+          
+          // Clean up
+          clearTimeout(timeout);
+          chrome.webRequest.onBeforeRequest.removeListener(requestListener);
+          chrome.webRequest.onHeadersReceived.removeListener(headerListener);
+          
+          resolve(details.url);
+        }
+      };
+
+      // Add listeners
+      chrome.webRequest.onBeforeRequest.addListener(
+        requestListener,
+        { urls: ["*://www.linkedin.com/*"] },
+        ["requestBody"]
+      );
+
+      chrome.webRequest.onHeadersReceived.addListener(
+        headerListener,
+        { urls: ["*://www.linkedin.com/*"] },
+        ["responseHeaders"]
+      );
     });
   },
 
@@ -3159,12 +3183,15 @@ const AdvancedPostAnalytics = {
     const API_ENDPOINT = 'https://mlew54d2u3dfar47trgs2rjjgi0vfopc.lambda-url.us-east-1.on.aws/';
 
     try {
-      logger.log(`Uploading single post analytics: ${downloadInfo.filename}`);
+      logger.log(`Uploading single post analytics from: ${downloadInfo.url || downloadInfo.filename || 'unknown source'}`);
 
       // Get the file from the download URL
       let fileBase64 = null;
+      let filename = 'PostAnalytics_Individual.xlsx'; // Default filename
+      
       try {
         if (downloadInfo.url) {
+          logger.log(`Fetching post analytics file from URL: ${downloadInfo.url}`);
           const response = await fetch(downloadInfo.url);
           if (response.ok) {
             const fileBlob = await response.blob();
@@ -3172,15 +3199,40 @@ const AdvancedPostAnalytics = {
             const arrayBuffer = await fileBlob.arrayBuffer();
             const uint8Array = new Uint8Array(arrayBuffer);
             fileBase64 = btoa(String.fromCharCode.apply(null, uint8Array));
-            logger.log(`Converted file ${downloadInfo.filename} to base64 (${fileBase64.length} chars)`);
+            logger.log(`Converted post analytics file to base64 (${fileBase64.length} chars)`);
+            
+            // Extract filename from URL parameters
+            try {
+              const urlParams = new URLSearchParams(new URL(downloadInfo.url).search);
+              const urlFilename = urlParams.get('x-ambry-um-filename');
+              if (urlFilename) {
+                filename = urlFilename;
+                logger.log(`Extracted filename from URL: ${filename}`);
+              }
+            } catch (urlError) {
+              logger.warn(`Could not extract filename from URL: ${urlError.message}`);
+            }
           } else {
             throw new Error(`Could not fetch file from URL: ${response.status}`);
           }
+        } else if (downloadInfo.filename) {
+          // Fallback to filename-based approach (shouldn't happen with new URL tracking)
+          logger.warn('Using fallback filename-based approach');
+          const response = await fetch(downloadInfo.filename);
+          if (response.ok) {
+            const fileBlob = await response.blob();
+            const arrayBuffer = await fileBlob.arrayBuffer();
+            const uint8Array = new Uint8Array(arrayBuffer);
+            fileBase64 = btoa(String.fromCharCode.apply(null, uint8Array));
+            filename = downloadInfo.filename.split('\\').pop().split('/').pop();
+          } else {
+            throw new Error(`Could not fetch file from path: ${response.status}`);
+          }
         } else {
-          throw new Error('Download URL not available');
+          throw new Error('Neither download URL nor filename available');
         }
       } catch (fileError) {
-        logger.warn(`Failed to get file ${downloadInfo.filename}: ${fileError.message}`);
+        logger.error(`Failed to get post analytics file: ${fileError.message}`);
         return { success: false, error: fileError.message };
       }
 
@@ -3188,9 +3240,8 @@ const AdvancedPostAnalytics = {
       const postIdMatch = analyticsUrl.match(/urn:li:activity:(\d+)/);
       const urlPostId = postIdMatch ? postIdMatch[1] : 'unknown';
       
-      // Extract just the filename from the full path
-      const fullPath = downloadInfo.filename;
-      const filename = fullPath.split('\\').pop().split('/').pop();
+      // Extract just the filename from the full path if needed
+      filename = filename.split('\\').pop().split('/').pop();
       
       // Extract post_id from filename for logging comparison
       const filenamePostIdMatch = filename.match(/(\d{19})/);
@@ -3232,7 +3283,7 @@ const AdvancedPostAnalytics = {
       formData.append('xlsx', fileBlob, filename); // Use filename here too
       
       logger.log(`Uploading post analytics - URL post_id: ${urlPostId}, Filename: ${filename}`);
-      logger.log(`Full path was: ${fullPath}`);
+      logger.log(`Download source: ${downloadInfo.url ? 'URL' : 'filename'}`);
       logger.log(`File post_id: ${filenamePostId} | API post_id: ${urlPostId}`);
       
       // Upload to API with FormData (same as main upload)
