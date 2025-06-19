@@ -442,7 +442,63 @@ const LinkedInMultilingualAutomation = {
 
       // Get download URL and upload file
       const apiURL = await downloadTracker;
-      await fileUploader.uploadToWebhook(apiURL, email);
+      const apiResponse = await fileUploader.uploadToWebhook(apiURL, email);
+
+      // Check if advanced post statistics is enabled
+      let advancedStatsEnabled = false;
+      try {
+        advancedStatsEnabled = await new Promise((resolve) => {
+          chrome.storage.local.get(['advancedPostStats'], (result) => {
+            resolve(result.advancedPostStats || false);
+          });
+        });
+        
+        logger.log(`Advanced post statistics setting: ${advancedStatsEnabled}`);
+      } catch (error) {
+        logger.warn(`Failed to check advanced stats setting: ${error.message}`);
+      }
+
+      if (advancedStatsEnabled) {
+        logger.log('Advanced post statistics enabled, processing individual posts...');
+        try {
+          // Get post analytics URLs from API response
+          let postAnalyticsUrls = null;
+          if (apiResponse) {
+            // Parse the response body if it's a string
+            let responseBody = apiResponse;
+            if (typeof responseBody === 'string') {
+              try {
+                responseBody = JSON.parse(responseBody);
+              } catch (parseError) {
+                logger.error(`Failed to parse API response: ${parseError.message}`);
+              }
+            }
+            
+            // Extract URLs from the response body
+            if (responseBody && responseBody.extracted_urls) {
+              postAnalyticsUrls = responseBody.extracted_urls;
+              logger.log(`API returned ${postAnalyticsUrls.length} extracted analytics URLs`);
+              logger.log(`Sample URLs: ${postAnalyticsUrls.slice(0, 3).join(', ')}`);
+            } else {
+              logger.warn('No extracted_urls found in API response');
+              logger.log('API response structure:', responseBody);
+            }
+          } else {
+            logger.warn('No API response available for advanced statistics');
+          }
+          
+          if (postAnalyticsUrls && postAnalyticsUrls.length > 0) {
+            await this.processAdvancedPostStatistics(tabId, email, logger, postAnalyticsUrls);
+          } else {
+            logger.log('No analytics URLs to process, skipping advanced statistics');
+          }
+        } catch (error) {
+          logger.error(`Advanced post statistics failed: ${error.message}`);
+          // Continue with main automation
+        }
+      } else {
+        logger.log('Advanced post statistics disabled, skipping individual post processing');
+      }
 
       // Update successful execution status
       await configManager.updateExecutionStatus('✅Success');
