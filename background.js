@@ -152,8 +152,11 @@ async function detectLanguage(tabId) {
         const langInfo = results[0].result;
         const detectedLang = langInfo.code;
 
-        // Log the detected language information
-        Logger.log(`Language detected: ${detectedLang} (Source: ${langInfo.source}, Original value: ${langInfo.value})`, 'info');
+        // Only log language detection once per session or when it changes
+        if (!this.lastDetectedLanguage || this.lastDetectedLanguage !== detectedLang) {
+          Logger.log(`Language detected: ${detectedLang}`, 'info');
+          this.lastDetectedLanguage = detectedLang;
+        }
 
         // Store the detected language in storage for reference
         chrome.storage.local.set({
@@ -2666,7 +2669,7 @@ const AdvancedPostAnalytics = {
                 uploadResult: uploadResult
               });
               results.successful++;
-              logger.log(`✅ Successfully uploaded analytics for post: ${postUrl}`);
+              logger.log(`✅ Post ${i}/${postUrls.length} uploaded successfully`);
             } else {
               logger.error(`❌ Upload failed for post ${postUrl}: ${uploadResult.error}`);
               results.errors.push({
@@ -2880,9 +2883,10 @@ const AdvancedPostAnalytics = {
               title 
             } = results[0].result;
 
-            logger.log(`Page check: readyState=${readyState}, exportButtons=${exportButtonCount}, loading=${isLoading}, analyticsContent=${hasAnalyticsContent}`);
-            logger.log(`Export button texts: ${exportButtonTexts.join(', ')}`);
-            logger.log(`Page title: ${title}`);
+            // Only log every few attempts to reduce verbosity
+            if (attempts % 3 === 0 || pageReady) {
+              logger.log(`Page loading... (${readyState}, ${exportButtonCount} export buttons)`);
+            }
 
             // More flexible loading criteria
             const pageReady = readyState === 'complete' && !isLoading;
@@ -2933,7 +2937,7 @@ const AdvancedPostAnalytics = {
             // Wait for download URL to be captured (same as main download)
             downloadTracker
               .then((downloadUrl) => {
-                logger.log(`✅ Post analytics download URL captured: ${downloadUrl}`);
+                logger.log(`✅ Download URL captured`);
                 resolve({ url: downloadUrl, source: 'url_tracking' });
               })
               .catch((error) => {
@@ -2972,7 +2976,7 @@ const AdvancedPostAnalytics = {
                header.value.includes('attachment')
              ))) {
           
-          logger.log(`📥 Captured post analytics download URL: ${details.url}`);
+          logger.log(`📥 Download URL captured`);
           
           // Clean up
           clearTimeout(timeout);
@@ -2990,7 +2994,7 @@ const AdvancedPostAnalytics = {
               header.value.includes('attachment')
             )) {
           
-          logger.log(`📥 Captured post analytics download URL from headers: ${details.url}`);
+          logger.log(`📥 Download URL captured from headers`);
           
           // Clean up
           clearTimeout(timeout);
@@ -3217,7 +3221,7 @@ const AdvancedPostAnalytics = {
     const API_ENDPOINT = 'https://mlew54d2u3dfar47trgs2rjjgi0vfopc.lambda-url.us-east-1.on.aws/';
 
     try {
-      logger.log(`Uploading single post analytics from: ${downloadInfo.url || downloadInfo.filename || 'unknown source'}`);
+      logger.log(`Uploading post analytics for: ${analyticsUrl}`);
 
       // Get the file from the download URL
       let fileBase64 = null;
@@ -3233,7 +3237,7 @@ const AdvancedPostAnalytics = {
             const arrayBuffer = await fileBlob.arrayBuffer();
             const uint8Array = new Uint8Array(arrayBuffer);
             fileBase64 = btoa(String.fromCharCode.apply(null, uint8Array));
-            logger.log(`Converted post analytics file to base64 (${fileBase64.length} chars)`);
+            logger.log(`File converted to base64 (${fileBase64.length} chars)`);
             
             // Extract filename from URL parameters
             try {
@@ -3290,9 +3294,7 @@ const AdvancedPostAnalytics = {
         return { success: false, error: errorMsg };
       }
       
-      logger.log(`✅ VALIDATION PASSED: PostAnalytics file detected: ${filename}`);
-      logger.log(`📊 URL post_id: ${urlPostId} | File post_id: ${filenamePostId}`);
-      logger.log(`🎯 Sending URL post_id (${urlPostId}) to API - this is the correct identifier`);
+      logger.log(`✅ Uploading: ${filename} (post_id: ${urlPostId})`);
       
       // Prepare FormData for Lambda (use URL post_id, not filename post_id)
       const formData = new FormData();
@@ -3316,9 +3318,7 @@ const AdvancedPostAnalytics = {
       const fileBlob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       formData.append('xlsx', fileBlob, filename); // Use filename here too
       
-      logger.log(`Uploading post analytics - URL post_id: ${urlPostId}, Filename: ${filename}`);
-      logger.log(`Download source: ${downloadInfo.url ? 'URL' : 'filename'}`);
-      logger.log(`File post_id: ${filenamePostId} | API post_id: ${urlPostId}`);
+      logger.log(`Uploading post analytics - Post ID: ${urlPostId}, File: ${filename}`);
       
       // Upload to API with FormData (same as main upload)
       logger.log(`Uploading to endpoint: ${API_ENDPOINT}`);
