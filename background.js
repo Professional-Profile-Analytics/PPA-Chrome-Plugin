@@ -1326,31 +1326,12 @@ async function scheduleRetry() {
     retryScheduled: true
   });
 
-  // Also create an alarm as a backup mechanism
+  // Create alarm for retry execution
   chrome.alarms.create(CONFIG.ALARMS.RETRY, { when: retryTime });
 
-  // DIRECT APPROACH: Set a JavaScript timeout as a third backup mechanism
-  setTimeout(() => {
-    Logger.log(`=== DIRECT TIMEOUT RETRY TRIGGERED at ${new Date().toISOString()} ===`);
-    Logger.log(`Direct timeout retry for attempt #${newRetryCount}`);
-
-    // Get current retry state
-    chrome.storage.local.get(['retryCount', 'retryScheduled'], (data) => {
-        Logger.log(`Current retry count in timeout: ${data.retryCount}`);
-        Logger.log(`Retry still scheduled: ${data.retryScheduled ? 'Yes' : 'No'}`);
-
-        // Only run if retry is still scheduled (hasn't been handled by alarm or watchdog)
-        if (data.retryScheduled) {
-          Logger.log('Running automation from direct timeout');
-          chrome.storage.local.set({ retryScheduled: false });
-          runAutomationScript();
-        } else {
-          Logger.log('Retry already handled by alarm or watchdog, skipping direct timeout execution');
-        }
-      });
-    }, CONFIG.RETRY.INTERVAL + 500); // Add 500ms buffer
-
-    Logger.log(`Scheduled retry #${newRetryCount} in 2 minutes. Time: ${retryTimeISO}`);
+  Logger.log(`Scheduled retry #${newRetryCount} in 2 minutes. Time: ${retryTimeISO}`);
+  Logger.log('Using alarm-based retry mechanism only');
+}
 
     // Debug information about all alarms
     //chrome.alarms.getAll((alarms) => {
@@ -2434,14 +2415,24 @@ const AlarmManager = {
       Logger.log(`Retry scheduled: ${data.retryScheduled ? 'Yes' : 'No'}`);
       Logger.log(`Next retry time: ${data.nextRetryTime || 'Not set'}`);
 
-      // Run the automation script with error handling
-      try {
-        Logger.log('Starting automation script from retry handler');
-        runAutomationScript().catch(error => {
-          Logger.error(`Retry execution failed: ${error.message}`);
+      // Only proceed if retry is still scheduled (prevents race conditions)
+      if (data.retryScheduled) {
+        // Clear the retry scheduled flag immediately to prevent duplicate executions
+        chrome.storage.local.set({ retryScheduled: false }, () => {
+          Logger.log('Retry scheduled flag cleared, proceeding with execution');
+          
+          // Run the automation script with error handling
+          try {
+            Logger.log('Starting automation script from retry handler');
+            runAutomationScript().catch(error => {
+              Logger.error(`Retry execution failed: ${error.message}`);
+            });
+          } catch (error) {
+            Logger.error(`Error in retry handler: ${error.message}`);
+          }
         });
-      } catch (error) {
-        Logger.error(`Error in retry handler: ${error.message}`);
+      } else {
+        Logger.log('Retry not scheduled or already handled, skipping execution');
       }
     });
   }
