@@ -500,6 +500,13 @@ const LinkedInMultilingualAutomation = {
         logger.log('Advanced post statistics disabled, skipping individual post processing');
       }
 
+      // Update successful execution status after all processing (including advanced statistics)
+      await configManager.updateExecutionStatus('✅Success');
+      logger.log('Execution status updated to: ✅Success');
+      
+      // Reset retry count on success
+      await configManager.resetRetryCount();
+
     } catch (error) {
       // Log and update failed execution status
       logger.error(`LinkedIn automation failed: ${error.message}`);
@@ -596,6 +603,13 @@ const LinkedInMultilingualAutomation = {
       } else {
         logger.log('Advanced post statistics disabled, skipping individual post processing');
       }
+
+      // Update successful execution status after all processing (including advanced statistics)
+      await configManager.updateExecutionStatus('✅Success');
+      logger.log('Execution status updated to: ✅Success');
+      
+      // Reset retry count on success
+      await configManager.resetRetryCount();
 
     } catch (error) {
       // Log and update failed execution status
