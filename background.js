@@ -3363,8 +3363,6 @@ const AdvancedPostAnalytics = {
       const fileBlob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       formData.append('xlsx', fileBlob, filename); // Use filename here too
       
-      logger.log(`Uploading post analytics - Post ID: ${urlPostId}, File: ${filename}`);
-      
       // Upload to API with FormData (same as main upload)
       const response = await fetch(API_ENDPOINT, {
         method: 'POST',
