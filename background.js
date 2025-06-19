@@ -483,7 +483,6 @@ const LinkedInMultilingualAutomation = {
             if (responseBody && responseBody.extracted_urls) {
               postAnalyticsUrls = responseBody.extracted_urls;
               logger.log(`API returned ${postAnalyticsUrls.length} extracted analytics URLs`);
-              logger.log(`Sample URLs: ${postAnalyticsUrls.slice(0, 3).join(', ')}`);
             } else {
               logger.warn('No extracted_urls found in API response');
               logger.log('API response structure:', responseBody);
@@ -612,7 +611,6 @@ const LinkedInMultilingualAutomation = {
             if (responseBody && responseBody.extracted_urls) {
               postAnalyticsUrls = responseBody.extracted_urls;
               logger.log(`API returned ${postAnalyticsUrls.length} extracted analytics URLs`);
-              logger.log(`Sample URLs: ${postAnalyticsUrls.slice(0, 3).join(', ')}`);
             } else {
               logger.warn('No extracted_urls found in API response');
               logger.log('API response structure:', responseBody);
