@@ -410,6 +410,8 @@ const LinkedInMultilingualAutomation = {
    * @returns {Promise<void>}
    */
   async executeSteps(tabId, email, webRequestTracker, fileUploader, configManager, logger) {
+    let advancedStatsResults = null; // Track advanced statistics results
+    
     try {
       // Wait for initial page load
       await MultilingualTabInteractions.waitForPageLoad(tabId);
@@ -488,7 +490,7 @@ const LinkedInMultilingualAutomation = {
           }
           
           if (postAnalyticsUrls && postAnalyticsUrls.length > 0) {
-            await this.processAdvancedPostStatistics(tabId, email, logger, postAnalyticsUrls);
+            advancedStatsResults = await this.processAdvancedPostStatistics(tabId, email, logger, postAnalyticsUrls);
           } else {
             logger.log('No analytics URLs to process, skipping advanced statistics');
           }
@@ -500,9 +502,17 @@ const LinkedInMultilingualAutomation = {
         logger.log('Advanced post statistics disabled, skipping individual post processing');
       }
 
+      // Create success message with post count if advanced stats was processed
+      let successMessage = '✅Success';
+      if (advancedStatsResults && advancedStatsResults.processed) {
+        successMessage = `✅Success (${advancedStatsResults.processed} posts processed)`;
+      } else if (await configManager.getAdvancedPostStatistics()) {
+        successMessage = '✅Success (Advanced post statistics enabled)';
+      }
+
       // Update successful execution status after all processing (including advanced statistics)
-      await configManager.updateExecutionStatus('✅Success');
-      logger.log('Execution status updated to: ✅Success');
+      await configManager.updateExecutionStatus(successMessage);
+      logger.log(`Execution status updated to: ${successMessage}`);
       
       // Reset retry count on success
       await configManager.resetRetryCount();
@@ -540,6 +550,8 @@ const LinkedInMultilingualAutomation = {
    * @returns {Promise<void>}
    */
   async executeStepsDirect(tabId, email, webRequestTracker, fileUploader, configManager, logger) {
+    let advancedStatsResults = null; // Track advanced statistics results
+    
     try {
       // Wait for initial page load
       await MultilingualTabInteractions.waitForPageLoad(tabId);
@@ -592,7 +604,7 @@ const LinkedInMultilingualAutomation = {
           }
           
           if (postAnalyticsUrls && postAnalyticsUrls.length > 0) {
-            await this.processAdvancedPostStatistics(tabId, email, logger, postAnalyticsUrls);
+            advancedStatsResults = await this.processAdvancedPostStatistics(tabId, email, logger, postAnalyticsUrls);
           } else {
             logger.log('No analytics URLs to process, skipping advanced statistics');
           }
@@ -604,9 +616,17 @@ const LinkedInMultilingualAutomation = {
         logger.log('Advanced post statistics disabled, skipping individual post processing');
       }
 
+      // Create success message with post count if advanced stats was processed
+      let successMessage = '✅Success';
+      if (advancedStatsResults && advancedStatsResults.processed) {
+        successMessage = `✅Success (${advancedStatsResults.processed} posts processed)`;
+      } else if (await configManager.getAdvancedPostStatistics()) {
+        successMessage = '✅Success (Advanced post statistics enabled)';
+      }
+
       // Update successful execution status after all processing (including advanced statistics)
-      await configManager.updateExecutionStatus('✅Success');
-      logger.log('Execution status updated to: ✅Success');
+      await configManager.updateExecutionStatus(successMessage);
+      logger.log(`Execution status updated to: ${successMessage}`);
       
       // Reset retry count on success
       await configManager.resetRetryCount();
