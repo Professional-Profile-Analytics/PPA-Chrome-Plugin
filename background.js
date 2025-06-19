@@ -2632,8 +2632,9 @@ const AdvancedPostAnalytics = {
                 uploadResult: uploadResult
               });
               results.successful++;
-              logger.log(`Successfully uploaded analytics for post: ${postUrl}`);
+              logger.log(`✅ Successfully uploaded analytics for post: ${postUrl}`);
             } else {
+              logger.error(`❌ Upload failed for post ${postUrl}: ${uploadResult.error}`);
               results.errors.push({
                 postUrl: postUrl,
                 error: `Upload failed: ${uploadResult.error}`
@@ -2641,9 +2642,10 @@ const AdvancedPostAnalytics = {
               results.failed++;
             }
           } else {
+            logger.error(`❌ Download failed for post: ${postUrl}`);
             results.errors.push({
               postUrl: postUrl,
-              error: 'Download failed'
+              error: 'Download failed - no file detected'
             });
             results.failed++;
           }
@@ -2658,11 +2660,28 @@ const AdvancedPostAnalytics = {
           }
 
         } catch (error) {
-          logger.error(`Failed to process post ${postUrl}: ${error.message}`);
-          results.errors.push({
-            postUrl: postUrl,
-            error: error.message
-          });
+          logger.error(`❌ Failed to process post ${postUrl}: ${error.message}`);
+          
+          // Check if this is a critical validation error
+          if (error.message.includes('STRICT VALIDATION FAILED') || 
+              error.message.includes('CRITICAL ERROR') ||
+              error.message.includes('Export button clicked but no download detected')) {
+            logger.error(`🚨 CRITICAL ERROR detected for post ${postUrl}`);
+            logger.error('This indicates LinkedIn export is not working properly');
+            
+            results.errors.push({
+              postUrl: postUrl,
+              error: `CRITICAL: ${error.message}`,
+              isCritical: true
+            });
+          } else {
+            results.errors.push({
+              postUrl: postUrl,
+              error: error.message,
+              isCritical: false
+            });
+          }
+          
           results.failed++;
           results.processed++;
           
@@ -2873,109 +2892,55 @@ const AdvancedPostAnalytics = {
         this.tryClickExportButton(tabId, logger)
           .then(() => {
             logger.log('Export button clicked successfully');
+            
+            // Validate that export actually triggered by checking for download start
+            const downloadValidationTimeout = setTimeout(() => {
+              logger.error('Export validation failed: No download started within 10 seconds of export click');
+              reject(new Error('Export button clicked but no download detected - LinkedIn export may not be working'));
+            }, 10000); // 10 second validation timeout
 
-            // Wait for download to start (longer timeout for Chrome download blocking)
+            // Wait for download to start
             setTimeout(() => {
-              // Extract post_id from current analytics URL for matching
-              const currentPostIdMatch = analyticsUrl.match(/urn:li:activity:(\d+)/);
-              const currentPostId = currentPostIdMatch ? currentPostIdMatch[1] : null;
-              
-              logger.log(`Looking for PostAnalytics file with post_id: ${currentPostId}`);
-              
-              chrome.downloads.search({ limit: 15 }, (newItems) => {
-                // STRICT: Only PostAnalytics files with matching post_id
-                let newDownloads = newItems.filter(item => {
-                  const isNewDownload = !downloadsBeforeExport.includes(item.id);
-                  const isXlsx = item.filename.endsWith('.xlsx');
-                  const isPostAnalytics = item.filename.toLowerCase().includes('postanalytics');
-                  const hasMatchingPostId = currentPostId ? item.filename.includes(currentPostId) : false;
-                  
-                  logger.log(`Checking download: ${item.filename} - New: ${isNewDownload}, XLSX: ${isXlsx}, PostAnalytics: ${isPostAnalytics}, MatchingID: ${hasMatchingPostId}`);
-                  
-                  return isNewDownload && isXlsx && isPostAnalytics && hasMatchingPostId;
-                });
+              chrome.downloads.search({ limit: 10 }, (newItems) => {
+                const recentDownloads = newItems.filter(item =>
+                  !downloadsBeforeExport.includes(item.id) &&
+                  item.filename.endsWith('.xlsx')
+                );
 
-                // Fallback: PostAnalytics files (any post_id) - but still require PostAnalytics
-                if (newDownloads.length === 0) {
-                  logger.log('No exact match found, looking for any PostAnalytics file...');
-                  newDownloads = newItems.filter(item => {
+                if (recentDownloads.length > 0) {
+                  clearTimeout(downloadValidationTimeout);
+                  logger.log('✅ Export validation successful: Download detected');
+                  
+                  // Continue with existing detection logic...
+                  // Extract post_id from current analytics URL for matching
+                  const currentPostIdMatch = analyticsUrl.match(/urn:li:activity:(\d+)/);
+                  const currentPostId = currentPostIdMatch ? currentPostIdMatch[1] : null;
+                  
+                  // Look for exact match
+                  const exactMatches = newItems.filter(item => {
                     const isNewDownload = !downloadsBeforeExport.includes(item.id);
                     const isXlsx = item.filename.endsWith('.xlsx');
                     const isPostAnalytics = item.filename.toLowerCase().includes('postanalytics');
+                    const hasExactPostId = currentPostId ? item.filename.includes(currentPostId) : false;
                     
-                    logger.log(`Fallback check: ${item.filename} - New: ${isNewDownload}, XLSX: ${isXlsx}, PostAnalytics: ${isPostAnalytics}`);
-                    
-                    return isNewDownload && isXlsx && isPostAnalytics;
+                    return isNewDownload && isXlsx && isPostAnalytics && hasExactPostId;
                   });
-                }
 
-                if (newDownloads.length > 0) {
-                  const downloadInfo = newDownloads[0];
-                  logger.log(`✓ PostAnalytics download detected: ${downloadInfo.filename}`);
-                  
-                  // Validate the file matches our criteria
-                  if (currentPostId && !downloadInfo.filename.includes(currentPostId)) {
-                    logger.warn(`Warning: PostAnalytics file found but post_id mismatch. Expected: ${currentPostId}, File: ${downloadInfo.filename}`);
+                  if (exactMatches.length > 0) {
+                    const downloadInfo = exactMatches[0];
+                    logger.log(`✅ PERFECT MATCH: PostAnalytics file with exact post_id: ${downloadInfo.filename}`);
+                    resolve(downloadInfo);
                   } else {
-                    logger.log(`✓ Perfect match: PostAnalytics file with correct post_id`);
+                    // Continue with extended detection as before
+                    this.performExtendedDownloadDetection(downloadsBeforeExport, analyticsUrl, logger, resolve, reject);
                   }
-                  
-                  resolve(downloadInfo);
                 } else {
-                  logger.log('No PostAnalytics file found in first attempt, waiting longer...');
-                  
-                  // Wait longer for the download - but STILL require PostAnalytics
-                  setTimeout(() => {
-                    chrome.downloads.search({ limit: 15 }, (finalItems) => {
-                      // STILL STRICT: Only PostAnalytics files
-                      let finalNewDownloads = finalItems.filter(item => {
-                        const isNewDownload = !downloadsBeforeExport.includes(item.id);
-                        const isXlsx = item.filename.endsWith('.xlsx');
-                        const isPostAnalytics = item.filename.toLowerCase().includes('postanalytics');
-                        
-                        logger.log(`Extended check: ${item.filename} - New: ${isNewDownload}, XLSX: ${isXlsx}, PostAnalytics: ${isPostAnalytics}`);
-                        
-                        return isNewDownload && isXlsx && isPostAnalytics;
-                      });
-
-                      if (finalNewDownloads.length > 0) {
-                        logger.log(`✓ PostAnalytics download detected after extended wait: ${finalNewDownloads[0].filename}`);
-                        resolve(finalNewDownloads[0]);
-                      } else {
-                        logger.log('Still no PostAnalytics file, final attempt...');
-                        
-                        // Final attempt - STILL require PostAnalytics (no generic .xlsx fallback)
-                        setTimeout(() => {
-                          chrome.downloads.search({ limit: 20 }, (veryFinalItems) => {
-                            const veryFinalNewDownloads = veryFinalItems.filter(item => {
-                              const isNewDownload = !downloadsBeforeExport.includes(item.id);
-                              const isXlsx = item.filename.endsWith('.xlsx');
-                              const isPostAnalytics = item.filename.toLowerCase().includes('postanalytics');
-                              
-                              logger.log(`Final check: ${item.filename} - New: ${isNewDownload}, XLSX: ${isXlsx}, PostAnalytics: ${isPostAnalytics}`);
-                              
-                              return isNewDownload && isXlsx && isPostAnalytics;
-                            });
-
-                            if (veryFinalNewDownloads.length > 0) {
-                              logger.log(`✓ PostAnalytics download detected after final wait: ${veryFinalNewDownloads[0].filename}`);
-                              resolve(veryFinalNewDownloads[0]);
-                            } else {
-                              logger.error('❌ No PostAnalytics file detected after multiple attempts');
-                              logger.log('Available new downloads:');
-                              veryFinalItems.filter(item => !downloadsBeforeExport.includes(item.id))
-                                .forEach(item => logger.log(`  - ${item.filename}`));
-                              
-                              reject(new Error('No PostAnalytics file detected after export - only PostAnalytics files are accepted'));
-                            }
-                          });
-                        }, 5000); // Additional 5 second wait
-                      }
-                    });
-                  }, 5000); // Extended to 5 seconds
+                  logger.warn('Export clicked but no .xlsx download detected yet, waiting longer...');
+                  // Continue with extended detection
+                  this.performExtendedDownloadDetection(downloadsBeforeExport, analyticsUrl, logger, resolve, reject);
                 }
               });
-            }, 3000); // Extended initial wait to 3 seconds
+            }, 2000);
           })
           .catch(error => {
             reject(new Error(`Export button click failed: ${error.message}`));
@@ -3087,6 +3052,76 @@ const AdvancedPostAnalytics = {
   },
 
   /**
+   * Perform extended download detection with strict post_id matching
+   * @param {Array} downloadsBeforeExport - Downloads before export
+   * @param {string} analyticsUrl - Analytics URL for post_id extraction
+   * @param {Object} logger - Logger instance
+   * @param {Function} resolve - Promise resolve function
+   * @param {Function} reject - Promise reject function
+   */
+  async performExtendedDownloadDetection(downloadsBeforeExport, analyticsUrl, logger, resolve, reject) {
+    const currentPostIdMatch = analyticsUrl.match(/urn:li:activity:(\d+)/);
+    const currentPostId = currentPostIdMatch ? currentPostIdMatch[1] : null;
+    
+    logger.log(`Looking for PostAnalytics file with EXACT post_id: ${currentPostId}`);
+    
+    // Extended wait with multiple attempts
+    setTimeout(() => {
+      chrome.downloads.search({ limit: 20 }, (finalItems) => {
+        let finalExactMatches = finalItems.filter(item => {
+          const isNewDownload = !downloadsBeforeExport.includes(item.id);
+          const isXlsx = item.filename.endsWith('.xlsx');
+          const isPostAnalytics = item.filename.toLowerCase().includes('postanalytics');
+          const hasExactPostId = currentPostId ? item.filename.includes(currentPostId) : false;
+          
+          logger.log(`Extended check: ${item.filename} - New: ${isNewDownload}, XLSX: ${isXlsx}, PostAnalytics: ${isPostAnalytics}, ExactMatch: ${hasExactPostId}`);
+          
+          return isNewDownload && isXlsx && isPostAnalytics && hasExactPostId;
+        });
+
+        if (finalExactMatches.length > 0) {
+          logger.log(`✅ EXACT MATCH found after extended wait: ${finalExactMatches[0].filename}`);
+          resolve(finalExactMatches[0]);
+        } else {
+          // Final attempt - STILL require exact match
+          setTimeout(() => {
+            chrome.downloads.search({ limit: 25 }, (veryFinalItems) => {
+              const veryFinalExactMatches = veryFinalItems.filter(item => {
+                const isNewDownload = !downloadsBeforeExport.includes(item.id);
+                const isXlsx = item.filename.endsWith('.xlsx');
+                const isPostAnalytics = item.filename.toLowerCase().includes('postanalytics');
+                const hasExactPostId = currentPostId ? item.filename.includes(currentPostId) : false;
+                
+                logger.log(`Final check: ${item.filename} - New: ${isNewDownload}, XLSX: ${isXlsx}, PostAnalytics: ${isPostAnalytics}, ExactMatch: ${hasExactPostId}`);
+                
+                return isNewDownload && isXlsx && isPostAnalytics && hasExactPostId;
+              });
+
+              if (veryFinalExactMatches.length > 0) {
+                logger.log(`✅ EXACT MATCH found after final wait: ${veryFinalExactMatches[0].filename}`);
+                resolve(veryFinalExactMatches[0]);
+              } else {
+                logger.error(`❌ CRITICAL: No PostAnalytics file with exact post_id ${currentPostId} found after multiple attempts`);
+                logger.error('This indicates the LinkedIn export did not work or generated wrong file');
+                
+                // Log all available downloads for debugging
+                logger.log('All available new downloads:');
+                veryFinalItems.filter(item => !downloadsBeforeExport.includes(item.id))
+                  .forEach(item => {
+                    const filePostId = item.filename.match(/(\d{19})/);
+                    logger.log(`  - ${item.filename} (Post ID: ${filePostId ? filePostId[1] : 'none'})`);
+                  });
+                
+                reject(new Error(`STRICT VALIDATION FAILED: No PostAnalytics file with exact post_id ${currentPostId} detected. Refusing to upload wrong file.`));
+              }
+            });
+          }, 5000); // Additional 5 second wait
+        }
+      });
+    }, 5000); // Extended to 5 seconds
+  },
+
+  /**
    * Upload single post analytics to API immediately after download
    * @param {string} email - User email
    * @param {string} originalUrl - Original post URL
@@ -3132,20 +3167,28 @@ const AdvancedPostAnalytics = {
       const fullPath = downloadInfo.filename;
       const filename = fullPath.split('\\').pop().split('/').pop(); // Handle both Windows (\) and Unix (/) paths
       
-      // Validate that we have the correct file
+      // Validate that we have the correct file before upload
       const isPostAnalyticsFile = filename.toLowerCase().includes('postanalytics');
       const hasMatchingPostId = filename.includes(postId);
       
       if (!isPostAnalyticsFile) {
-        logger.warn(`Warning: File does not appear to be a PostAnalytics file: ${filename}`);
+        const errorMsg = `CRITICAL ERROR: File is not a PostAnalytics file: ${filename}`;
+        logger.error(errorMsg);
+        return { success: false, error: errorMsg };
       }
       
       if (isPostAnalyticsFile && !hasMatchingPostId) {
-        logger.warn(`Warning: PostAnalytics file found but post_id mismatch. Expected: ${postId}, File: ${filename}`);
+        const errorMsg = `CRITICAL ERROR: PostAnalytics file has wrong post_id. Expected: ${postId}, Got file: ${filename}`;
+        logger.error(errorMsg);
+        return { success: false, error: errorMsg };
       }
       
       if (isPostAnalyticsFile && hasMatchingPostId) {
-        logger.log(`✓ Correct PostAnalytics file detected with matching post_id: ${filename}`);
+        logger.log(`✅ VALIDATION PASSED: Correct PostAnalytics file with matching post_id: ${filename}`);
+      } else {
+        const errorMsg = `VALIDATION FAILED: File validation error for ${filename}`;
+        logger.error(errorMsg);
+        return { success: false, error: errorMsg };
       }
       
       // Prepare FormData for Lambda (same format as main upload)
