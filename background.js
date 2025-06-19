@@ -500,18 +500,13 @@ const LinkedInMultilingualAutomation = {
         logger.log('Advanced post statistics disabled, skipping individual post processing');
       }
 
-      // Update successful execution status
-      await configManager.updateExecutionStatus('✅Success');
-      // Reset retry count on success
-      await configManager.resetRetryCount();
-
     } catch (error) {
       // Log and update failed execution status
       logger.error(`LinkedIn automation failed: ${error.message}`);
       await configManager.updateExecutionStatus('Failed', error);
       throw error;
     } finally {
-      // Always close the tab safely
+      // Always close the tab safely after everything is complete
       try {
         chrome.tabs.remove(tabId, () => {
           if (chrome.runtime.lastError) {
@@ -602,18 +597,13 @@ const LinkedInMultilingualAutomation = {
         logger.log('Advanced post statistics disabled, skipping individual post processing');
       }
 
-      // Update successful execution status
-      await configManager.updateExecutionStatus('✅Success');
-      // Reset retry count on success
-      await configManager.resetRetryCount();
-
     } catch (error) {
       // Log and update failed execution status
       logger.error(`LinkedIn direct automation failed: ${error.message}`);
       await configManager.updateExecutionStatus('Failed', error);
       throw error;
     } finally {
-      // Always close the tab safely
+      // Always close the tab safely after everything is complete
       try {
         chrome.tabs.remove(tabId, () => {
           if (chrome.runtime.lastError) {
@@ -2888,9 +2878,10 @@ const AdvancedPostAnalytics = {
               chrome.downloads.search({ limit: 10 }, (newItems) => {
                 const newDownloads = newItems.filter(item =>
                   !downloadsBeforeExport.includes(item.id) &&
-                  (item.filename.toLowerCase().includes('post') ||
-                   item.filename.toLowerCase().includes('analytics') ||
-                   item.filename.endsWith('.xlsx'))
+                  item.filename.endsWith('.xlsx') &&
+                  (item.filename.toLowerCase().includes('postanalytics') ||
+                   item.filename.toLowerCase().includes('post_analytics') ||
+                   item.filename.toLowerCase().includes('analytics'))
                 );
 
                 if (newDownloads.length > 0) {
@@ -2902,7 +2893,8 @@ const AdvancedPostAnalytics = {
                   setTimeout(() => {
                     chrome.downloads.search({ limit: 10 }, (finalItems) => {
                       const finalNewDownloads = finalItems.filter(item =>
-                        !downloadsBeforeExport.includes(item.id)
+                        !downloadsBeforeExport.includes(item.id) &&
+                        item.filename.endsWith('.xlsx')
                       );
 
                       if (finalNewDownloads.length > 0) {
@@ -2913,15 +2905,16 @@ const AdvancedPostAnalytics = {
                         setTimeout(() => {
                           chrome.downloads.search({ limit: 15 }, (veryFinalItems) => {
                             const veryFinalNewDownloads = veryFinalItems.filter(item =>
-                              !downloadsBeforeExport.includes(item.id)
+                              !downloadsBeforeExport.includes(item.id) &&
+                              item.filename.endsWith('.xlsx')
                             );
 
                             if (veryFinalNewDownloads.length > 0) {
                               logger.log(`Download detected after very extended wait: ${veryFinalNewDownloads[0].filename}`);
                               resolve(veryFinalNewDownloads[0]);
                             } else {
-                              logger.warn('No download detected after multiple attempts - Chrome may be blocking downloads');
-                              reject(new Error('No download detected after export - Chrome download blocking detected'));
+                              logger.warn('No .xlsx download detected after multiple attempts - Chrome may be blocking downloads');
+                              reject(new Error('No .xlsx download detected after export - Chrome download blocking detected'));
                             }
                           });
                         }, 5000); // Additional 5 second wait
