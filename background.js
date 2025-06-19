@@ -2766,14 +2766,46 @@ const AdvancedPostAnalytics = {
         chrome.scripting.executeScript({
           target: { tabId },
           func: () => {
-            // Check if the analytics page has loaded
-            const exportButton = document.querySelector('button[data-test-id="export-button"], button:contains("Export"), button[aria-label*="Export"]');
-            const loadingIndicator = document.querySelector('[data-test-id="loading"], .loading, .spinner');
+            // Check if the analytics page has loaded with more flexible selectors
+            const exportButtons = [
+              document.querySelector('button[data-test-id="export-button"]'),
+              document.querySelector('button[aria-label*="Export"]'),
+              document.querySelector('button[aria-label*="export"]'),
+              ...Array.from(document.querySelectorAll('button')).filter(btn => 
+                btn.textContent && btn.textContent.toLowerCase().includes('export')
+              ),
+              ...Array.from(document.querySelectorAll('button')).filter(btn => 
+                btn.textContent && btn.textContent.toLowerCase().includes('download')
+              )
+            ].filter(Boolean);
+
+            const loadingIndicators = [
+              document.querySelector('[data-test-id="loading"]'),
+              document.querySelector('.loading'),
+              document.querySelector('.spinner'),
+              document.querySelector('[role="progressbar"]'),
+              document.querySelector('.loading-spinner')
+            ].filter(Boolean);
+
+            // Check for analytics content indicators
+            const analyticsContent = [
+              document.querySelector('[data-test-id="analytics"]'),
+              document.querySelector('.analytics'),
+              document.querySelector('[data-test-id="post-analytics"]'),
+              document.querySelector('.post-analytics'),
+              document.querySelector('[data-test-id="insights"]'),
+              document.querySelector('.insights')
+            ].filter(Boolean);
 
             return {
-              hasExportButton: !!exportButton,
-              isLoading: !!loadingIndicator,
-              readyState: document.readyState
+              hasExportButton: exportButtons.length > 0,
+              exportButtonCount: exportButtons.length,
+              exportButtonTexts: exportButtons.map(btn => btn.textContent?.trim() || btn.getAttribute('aria-label') || 'No text'),
+              isLoading: loadingIndicators.length > 0,
+              hasAnalyticsContent: analyticsContent.length > 0,
+              readyState: document.readyState,
+              url: window.location.href,
+              title: document.title
             };
           }
         }, (results) => {
@@ -2784,12 +2816,37 @@ const AdvancedPostAnalytics = {
           }
 
           if (results && results[0] && results[0].result) {
-            const { hasExportButton, isLoading, readyState } = results[0].result;
+            const { 
+              hasExportButton, 
+              exportButtonCount, 
+              exportButtonTexts, 
+              isLoading, 
+              hasAnalyticsContent, 
+              readyState, 
+              url, 
+              title 
+            } = results[0].result;
 
-            if (readyState === 'complete' && hasExportButton && !isLoading) {
+            logger.log(`Page check: readyState=${readyState}, exportButtons=${exportButtonCount}, loading=${isLoading}, analyticsContent=${hasAnalyticsContent}`);
+            logger.log(`Export button texts: ${exportButtonTexts.join(', ')}`);
+            logger.log(`Page title: ${title}`);
+
+            // More flexible loading criteria
+            const pageReady = readyState === 'complete' && !isLoading;
+            const hasContent = hasExportButton || hasAnalyticsContent;
+
+            if (pageReady && hasContent) {
               clearInterval(checkInterval);
               logger.log('Analytics page loaded successfully');
               resolve();
+            } else if (pageReady && !hasContent) {
+              // Page is loaded but might not have export functionality
+              // Let's try to proceed anyway after a short wait
+              setTimeout(() => {
+                clearInterval(checkInterval);
+                logger.warn('Analytics page loaded but no export button found, proceeding anyway');
+                resolve();
+              }, 2000);
             }
           }
         });
@@ -2811,8 +2868,8 @@ const AdvancedPostAnalytics = {
       chrome.downloads.search({ limit: 10 }, (items) => {
         items.forEach(item => downloadsBeforeExport.push(item.id));
 
-        // Click the export button using the existing MultilingualTabInteractions
-        MultilingualTabInteractions.clickButton(tabId, 'export')
+        // Try multiple approaches to click the export button
+        this.tryClickExportButton(tabId, logger)
           .then(() => {
             logger.log('Export button clicked successfully');
 
@@ -2822,7 +2879,8 @@ const AdvancedPostAnalytics = {
                 const newDownloads = newItems.filter(item =>
                   !downloadsBeforeExport.includes(item.id) &&
                   (item.filename.toLowerCase().includes('post') ||
-                   item.filename.toLowerCase().includes('analytics'))
+                   item.filename.toLowerCase().includes('analytics') ||
+                   item.filename.endsWith('.xlsx'))
                 );
 
                 if (newDownloads.length > 0) {
@@ -2838,6 +2896,7 @@ const AdvancedPostAnalytics = {
                       );
 
                       if (finalNewDownloads.length > 0) {
+                        logger.log(`Download detected: ${finalNewDownloads[0].filename}`);
                         resolve(finalNewDownloads[0]);
                       } else {
                         reject(new Error('No download detected after export'));
@@ -2851,6 +2910,108 @@ const AdvancedPostAnalytics = {
           .catch(error => {
             reject(new Error(`Export button click failed: ${error.message}`));
           });
+      });
+    });
+  },
+
+  /**
+   * Try multiple approaches to click the export button
+   * @param {number} tabId - Tab ID
+   * @param {Object} logger - Logger instance
+   * @returns {Promise<void>}
+   */
+  async tryClickExportButton(tabId, logger) {
+    // First try the standard MultilingualTabInteractions approach
+    try {
+      await MultilingualTabInteractions.clickButton(tabId, 'export');
+      logger.log('Export button clicked using MultilingualTabInteractions');
+      return;
+    } catch (error) {
+      logger.warn(`MultilingualTabInteractions export click failed: ${error.message}`);
+    }
+
+    // Try direct button clicking with flexible selectors
+    return new Promise((resolve, reject) => {
+      chrome.scripting.executeScript({
+        target: { tabId },
+        func: () => {
+          // Try multiple selectors for export buttons
+          const exportSelectors = [
+            'button[data-test-id="export-button"]',
+            'button[aria-label*="Export"]',
+            'button[aria-label*="export"]',
+            'button[data-test-id*="export"]',
+            'button[data-test-id*="download"]',
+            '[role="button"][aria-label*="Export"]',
+            '[role="button"][aria-label*="export"]'
+          ];
+
+          let exportButton = null;
+
+          // Try each selector
+          for (const selector of exportSelectors) {
+            exportButton = document.querySelector(selector);
+            if (exportButton) {
+              console.log(`Found export button with selector: ${selector}`);
+              break;
+            }
+          }
+
+          // If no button found with specific selectors, try text-based search
+          if (!exportButton) {
+            const allButtons = Array.from(document.querySelectorAll('button'));
+            exportButton = allButtons.find(btn => {
+              const text = btn.textContent?.toLowerCase() || '';
+              const ariaLabel = btn.getAttribute('aria-label')?.toLowerCase() || '';
+              return text.includes('export') || text.includes('download') || 
+                     ariaLabel.includes('export') || ariaLabel.includes('download');
+            });
+
+            if (exportButton) {
+              console.log(`Found export button by text search: ${exportButton.textContent || exportButton.getAttribute('aria-label')}`);
+            }
+          }
+
+          if (exportButton) {
+            exportButton.click();
+            return { success: true, buttonText: exportButton.textContent || exportButton.getAttribute('aria-label') };
+          } else {
+            // Log available buttons for debugging
+            const allButtons = Array.from(document.querySelectorAll('button'));
+            const buttonInfo = allButtons.map(btn => ({
+              text: btn.textContent?.trim(),
+              ariaLabel: btn.getAttribute('aria-label'),
+              dataTestId: btn.getAttribute('data-test-id'),
+              className: btn.className
+            }));
+            
+            return { 
+              success: false, 
+              error: 'No export button found',
+              availableButtons: buttonInfo.slice(0, 10) // Limit to first 10 for debugging
+            };
+          }
+        }
+      }, (results) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(`Script execution failed: ${chrome.runtime.lastError.message}`));
+          return;
+        }
+
+        if (results && results[0] && results[0].result) {
+          const result = results[0].result;
+          
+          if (result.success) {
+            logger.log(`Export button clicked successfully: ${result.buttonText}`);
+            resolve();
+          } else {
+            logger.error(`Export button not found: ${result.error}`);
+            logger.log('Available buttons:', result.availableButtons);
+            reject(new Error(result.error));
+          }
+        } else {
+          reject(new Error('No result from export button click script'));
+        }
       });
     });
   },
