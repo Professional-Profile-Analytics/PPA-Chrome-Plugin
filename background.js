@@ -2895,13 +2895,14 @@ const AdvancedPostAnalytics = {
             
             // Validate that export actually triggered by checking for download start
             const downloadValidationTimeout = setTimeout(() => {
-              logger.error('Export validation failed: No download started within 10 seconds of export click');
-              reject(new Error('Export button clicked but no download detected - LinkedIn export may not be working'));
-            }, 10000); // 10 second validation timeout
+              logger.warn('Export validation: No immediate download detected, but continuing with extended search...');
+              // Don't reject here, continue with extended detection
+              this.performExtendedDownloadDetection(downloadsBeforeExport, analyticsUrl, logger, resolve, reject);
+            }, 8000); // Reduced from 10 to 8 seconds
 
-            // Wait for download to start
+            // Wait for download to start - shorter initial wait
             setTimeout(() => {
-              chrome.downloads.search({ limit: 10 }, (newItems) => {
+              chrome.downloads.search({ limit: 15 }, (newItems) => {
                 const recentDownloads = newItems.filter(item =>
                   !downloadsBeforeExport.includes(item.id) &&
                   item.filename.endsWith('.xlsx')
@@ -2924,6 +2925,8 @@ const AdvancedPostAnalytics = {
                     const isXlsx = item.filename.endsWith('.xlsx');
                     const isPostAnalytics = item.filename.toLowerCase().includes('postanalytics');
                     
+                    logger.log(`Quick check: ${item.filename} - New: ${isNewDownload}, XLSX: ${isXlsx}, PostAnalytics: ${isPostAnalytics}`);
+                    
                     return isNewDownload && isXlsx && isPostAnalytics;
                   });
 
@@ -2931,22 +2934,22 @@ const AdvancedPostAnalytics = {
                     const downloadInfo = postAnalyticsFiles[0];
                     const filenamePostId = downloadInfo.filename.match(/(\d{19})/);
                     
-                    logger.log(`✅ NEW PostAnalytics file detected: ${downloadInfo.filename}`);
+                    logger.log(`✅ NEW PostAnalytics file detected immediately: ${downloadInfo.filename}`);
                     logger.log(`📊 URL post_id: ${urlPostId} | File post_id: ${filenamePostId ? filenamePostId[1] : 'unknown'}`);
                     logger.log(`🎯 API will receive URL post_id (${urlPostId}), not filename post_id`);
                     
                     resolve(downloadInfo);
                   } else {
                     logger.log('PostAnalytics file not found in immediate check, using extended detection...');
+                    clearTimeout(downloadValidationTimeout);
                     this.performExtendedDownloadDetection(downloadsBeforeExport, analyticsUrl, logger, resolve, reject);
                   }
                 } else {
-                  logger.warn('Export clicked but no .xlsx download detected yet, waiting longer...');
-                  // Continue with extended detection
-                  this.performExtendedDownloadDetection(downloadsBeforeExport, analyticsUrl, logger, resolve, reject);
+                  logger.log('No .xlsx downloads detected yet, will continue with extended detection...');
+                  // Don't clear timeout here, let it continue to extended detection
                 }
               });
-            }, 2000);
+            }, 1500); // Reduced from 2000 to 1500ms
           })
           .catch(error => {
             reject(new Error(`Export button click failed: ${error.message}`));
@@ -3069,18 +3072,19 @@ const AdvancedPostAnalytics = {
     const currentPostIdMatch = analyticsUrl.match(/urn:li:activity:(\d+)/);
     const urlPostId = currentPostIdMatch ? currentPostIdMatch[1] : null;
     
-    logger.log(`🎯 Extended detection for URL post_id: ${urlPostId}`);
-    logger.log('Looking for ANY new PostAnalytics file (filename post_id may differ)');
+    logger.log(`🔍 Extended detection for URL post_id: ${urlPostId}`);
+    logger.log('Searching more aggressively for PostAnalytics files...');
     
-    // Extended wait with multiple attempts
+    // First extended attempt - shorter wait
     setTimeout(() => {
-      chrome.downloads.search({ limit: 20 }, (finalItems) => {
-        let postAnalyticsFiles = finalItems.filter(item => {
+      chrome.downloads.search({ limit: 25 }, (items) => {
+        // Look for PostAnalytics files that are new
+        let postAnalyticsFiles = items.filter(item => {
           const isNewDownload = !downloadsBeforeExport.includes(item.id);
           const isXlsx = item.filename.endsWith('.xlsx');
           const isPostAnalytics = item.filename.toLowerCase().includes('postanalytics');
           
-          logger.log(`Extended check: ${item.filename} - New: ${isNewDownload}, XLSX: ${isXlsx}, PostAnalytics: ${isPostAnalytics}`);
+          logger.log(`Extended search: ${item.filename} - New: ${isNewDownload}, XLSX: ${isXlsx}, PostAnalytics: ${isPostAnalytics}`);
           
           return isNewDownload && isXlsx && isPostAnalytics;
         });
@@ -3089,47 +3093,57 @@ const AdvancedPostAnalytics = {
           const downloadInfo = postAnalyticsFiles[0];
           const filenamePostId = downloadInfo.filename.match(/(\d{19})/);
           
-          logger.log(`✅ PostAnalytics file found after extended wait: ${downloadInfo.filename}`);
+          logger.log(`✅ PostAnalytics file found in extended search: ${downloadInfo.filename}`);
           logger.log(`📊 URL post_id: ${urlPostId} | File post_id: ${filenamePostId ? filenamePostId[1] : 'unknown'}`);
           logger.log(`🎯 API will receive URL post_id (${urlPostId})`);
           
           resolve(downloadInfo);
         } else {
-          // Final attempt
+          logger.log('Still searching... checking for very recent PostAnalytics files');
+          
+          // Second attempt - look for ANY PostAnalytics file from recent time
           setTimeout(() => {
-            chrome.downloads.search({ limit: 25 }, (veryFinalItems) => {
-              const veryFinalPostAnalyticsFiles = veryFinalItems.filter(item => {
-                const isNewDownload = !downloadsBeforeExport.includes(item.id);
+            chrome.downloads.search({ limit: 30 }, (finalItems) => {
+              // Get current time and look for files downloaded in last 2 minutes
+              const twoMinutesAgo = Date.now() - (2 * 60 * 1000);
+              
+              let recentPostAnalyticsFiles = finalItems.filter(item => {
                 const isXlsx = item.filename.endsWith('.xlsx');
                 const isPostAnalytics = item.filename.toLowerCase().includes('postanalytics');
+                const isRecent = new Date(item.startTime).getTime() > twoMinutesAgo;
+                const isNotInOriginalList = !downloadsBeforeExport.includes(item.id);
                 
-                logger.log(`Final check: ${item.filename} - New: ${isNewDownload}, XLSX: ${isXlsx}, PostAnalytics: ${isPostAnalytics}`);
+                logger.log(`Recent search: ${item.filename} - XLSX: ${isXlsx}, PostAnalytics: ${isPostAnalytics}, Recent: ${isRecent}, NotInOriginal: ${isNotInOriginalList}`);
                 
-                return isNewDownload && isXlsx && isPostAnalytics;
+                return isXlsx && isPostAnalytics && (isNotInOriginalList || isRecent);
               });
 
-              if (veryFinalPostAnalyticsFiles.length > 0) {
-                const downloadInfo = veryFinalPostAnalyticsFiles[0];
+              if (recentPostAnalyticsFiles.length > 0) {
+                // Sort by start time, get the most recent
+                recentPostAnalyticsFiles.sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
+                const downloadInfo = recentPostAnalyticsFiles[0];
                 const filenamePostId = downloadInfo.filename.match(/(\d{19})/);
                 
-                logger.log(`✅ PostAnalytics file found after final wait: ${downloadInfo.filename}`);
+                logger.log(`✅ Recent PostAnalytics file found: ${downloadInfo.filename}`);
                 logger.log(`📊 URL post_id: ${urlPostId} | File post_id: ${filenamePostId ? filenamePostId[1] : 'unknown'}`);
                 logger.log(`🎯 API will receive URL post_id (${urlPostId})`);
+                logger.log(`⏰ File download time: ${downloadInfo.startTime}`);
                 
                 resolve(downloadInfo);
               } else {
-                logger.error(`❌ No PostAnalytics file detected after multiple attempts for URL post_id: ${urlPostId}`);
-                logger.log('Available new downloads:');
-                veryFinalItems.filter(item => !downloadsBeforeExport.includes(item.id))
-                  .forEach(item => logger.log(`  - ${item.filename}`));
+                logger.error(`❌ No PostAnalytics file found after extensive search for URL post_id: ${urlPostId}`);
+                logger.log('All recent downloads:');
+                finalItems.slice(0, 10).forEach(item => {
+                  logger.log(`  - ${item.filename} (${item.startTime})`);
+                });
                 
-                reject(new Error(`No PostAnalytics file detected after export for URL post_id: ${urlPostId}`));
+                reject(new Error(`No PostAnalytics file detected after extensive search for URL post_id: ${urlPostId}`));
               }
             });
-          }, 5000);
+          }, 3000); // 3 second wait for second attempt
         }
       });
-    }, 5000);
+    }, 2000); // 2 second wait for first extended attempt
   },
 
   /**
