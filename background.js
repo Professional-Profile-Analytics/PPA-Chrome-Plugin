@@ -2660,9 +2660,11 @@ const AdvancedPostAnalytics = {
 
           results.processed++;
 
-          // Add delay between posts to avoid rate limiting
+          // Add significant delay between posts to avoid Chrome download blocking
           if (i < postUrls.length - 1) {
-            await this.delay(2000 + Math.random() * 3000); // 2-5 second delay
+            const delayTime = 8000 + Math.random() * 7000; // 8-15 second delay
+            logger.log(`Waiting ${Math.round(delayTime/1000)} seconds before next post to avoid download blocking...`);
+            await this.delay(delayTime);
           }
 
         } catch (error) {
@@ -2672,6 +2674,14 @@ const AdvancedPostAnalytics = {
             error: error.message
           });
           results.failed++;
+          results.processed++;
+          
+          // Still add delay even on error to avoid rapid requests
+          if (i < postUrls.length - 1) {
+            const delayTime = 5000 + Math.random() * 3000; // 5-8 second delay on error
+            logger.log(`Error occurred, waiting ${Math.round(delayTime/1000)} seconds before next post...`);
+            await this.delay(delayTime);
+          }
         }
       }
 
@@ -2873,7 +2883,7 @@ const AdvancedPostAnalytics = {
           .then(() => {
             logger.log('Export button clicked successfully');
 
-            // Wait for download to start
+            // Wait for download to start (longer timeout for Chrome download blocking)
             setTimeout(() => {
               chrome.downloads.search({ limit: 10 }, (newItems) => {
                 const newDownloads = newItems.filter(item =>
@@ -2888,7 +2898,7 @@ const AdvancedPostAnalytics = {
                   logger.log(`Post analytics download detected: ${downloadInfo.filename}`);
                   resolve(downloadInfo);
                 } else {
-                  // Wait a bit more for the download
+                  // Wait longer for the download (Chrome might be blocking)
                   setTimeout(() => {
                     chrome.downloads.search({ limit: 10 }, (finalItems) => {
                       const finalNewDownloads = finalItems.filter(item =>
@@ -2896,16 +2906,31 @@ const AdvancedPostAnalytics = {
                       );
 
                       if (finalNewDownloads.length > 0) {
-                        logger.log(`Download detected: ${finalNewDownloads[0].filename}`);
+                        logger.log(`Download detected after extended wait: ${finalNewDownloads[0].filename}`);
                         resolve(finalNewDownloads[0]);
                       } else {
-                        reject(new Error('No download detected after export'));
+                        // One more attempt with even longer wait
+                        setTimeout(() => {
+                          chrome.downloads.search({ limit: 15 }, (veryFinalItems) => {
+                            const veryFinalNewDownloads = veryFinalItems.filter(item =>
+                              !downloadsBeforeExport.includes(item.id)
+                            );
+
+                            if (veryFinalNewDownloads.length > 0) {
+                              logger.log(`Download detected after very extended wait: ${veryFinalNewDownloads[0].filename}`);
+                              resolve(veryFinalNewDownloads[0]);
+                            } else {
+                              logger.warn('No download detected after multiple attempts - Chrome may be blocking downloads');
+                              reject(new Error('No download detected after export - Chrome download blocking detected'));
+                            }
+                          });
+                        }, 5000); // Additional 5 second wait
                       }
                     });
-                  }, 3000);
+                  }, 5000); // Extended to 5 seconds
                 }
               });
-            }, 2000);
+            }, 3000); // Extended initial wait to 3 seconds
           })
           .catch(error => {
             reject(new Error(`Export button click failed: ${error.message}`));
