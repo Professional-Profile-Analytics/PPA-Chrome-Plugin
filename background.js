@@ -2911,27 +2911,33 @@ const AdvancedPostAnalytics = {
                   clearTimeout(downloadValidationTimeout);
                   logger.log('✅ Export validation successful: Download detected');
                   
-                  // Continue with existing detection logic...
-                  // Extract post_id from current analytics URL for matching
+                  // Extract post_id from URL (this is what we'll send to API)
                   const currentPostIdMatch = analyticsUrl.match(/urn:li:activity:(\d+)/);
-                  const currentPostId = currentPostIdMatch ? currentPostIdMatch[1] : null;
+                  const urlPostId = currentPostIdMatch ? currentPostIdMatch[1] : null;
                   
-                  // Look for exact match
-                  const exactMatches = newItems.filter(item => {
+                  logger.log(`🎯 URL post_id: ${urlPostId} - will be sent to API`);
+                  logger.log('Looking for ANY new PostAnalytics file (filename post_id may differ)');
+                  
+                  // Look for ANY new PostAnalytics file (don't match filename post_id)
+                  const postAnalyticsFiles = newItems.filter(item => {
                     const isNewDownload = !downloadsBeforeExport.includes(item.id);
                     const isXlsx = item.filename.endsWith('.xlsx');
                     const isPostAnalytics = item.filename.toLowerCase().includes('postanalytics');
-                    const hasExactPostId = currentPostId ? item.filename.includes(currentPostId) : false;
                     
-                    return isNewDownload && isXlsx && isPostAnalytics && hasExactPostId;
+                    return isNewDownload && isXlsx && isPostAnalytics;
                   });
 
-                  if (exactMatches.length > 0) {
-                    const downloadInfo = exactMatches[0];
-                    logger.log(`✅ PERFECT MATCH: PostAnalytics file with exact post_id: ${downloadInfo.filename}`);
+                  if (postAnalyticsFiles.length > 0) {
+                    const downloadInfo = postAnalyticsFiles[0];
+                    const filenamePostId = downloadInfo.filename.match(/(\d{19})/);
+                    
+                    logger.log(`✅ NEW PostAnalytics file detected: ${downloadInfo.filename}`);
+                    logger.log(`📊 URL post_id: ${urlPostId} | File post_id: ${filenamePostId ? filenamePostId[1] : 'unknown'}`);
+                    logger.log(`🎯 API will receive URL post_id (${urlPostId}), not filename post_id`);
+                    
                     resolve(downloadInfo);
                   } else {
-                    // Continue with extended detection as before
+                    logger.log('PostAnalytics file not found in immediate check, using extended detection...');
                     this.performExtendedDownloadDetection(downloadsBeforeExport, analyticsUrl, logger, resolve, reject);
                   }
                 } else {
@@ -3052,7 +3058,7 @@ const AdvancedPostAnalytics = {
   },
 
   /**
-   * Perform extended download detection with strict post_id matching
+   * Perform extended download detection - track ANY PostAnalytics file
    * @param {Array} downloadsBeforeExport - Downloads before export
    * @param {string} analyticsUrl - Analytics URL for post_id extraction
    * @param {Object} logger - Logger instance
@@ -3061,64 +3067,69 @@ const AdvancedPostAnalytics = {
    */
   async performExtendedDownloadDetection(downloadsBeforeExport, analyticsUrl, logger, resolve, reject) {
     const currentPostIdMatch = analyticsUrl.match(/urn:li:activity:(\d+)/);
-    const currentPostId = currentPostIdMatch ? currentPostIdMatch[1] : null;
+    const urlPostId = currentPostIdMatch ? currentPostIdMatch[1] : null;
     
-    logger.log(`Looking for PostAnalytics file with EXACT post_id: ${currentPostId}`);
+    logger.log(`🎯 Extended detection for URL post_id: ${urlPostId}`);
+    logger.log('Looking for ANY new PostAnalytics file (filename post_id may differ)');
     
     // Extended wait with multiple attempts
     setTimeout(() => {
       chrome.downloads.search({ limit: 20 }, (finalItems) => {
-        let finalExactMatches = finalItems.filter(item => {
+        let postAnalyticsFiles = finalItems.filter(item => {
           const isNewDownload = !downloadsBeforeExport.includes(item.id);
           const isXlsx = item.filename.endsWith('.xlsx');
           const isPostAnalytics = item.filename.toLowerCase().includes('postanalytics');
-          const hasExactPostId = currentPostId ? item.filename.includes(currentPostId) : false;
           
-          logger.log(`Extended check: ${item.filename} - New: ${isNewDownload}, XLSX: ${isXlsx}, PostAnalytics: ${isPostAnalytics}, ExactMatch: ${hasExactPostId}`);
+          logger.log(`Extended check: ${item.filename} - New: ${isNewDownload}, XLSX: ${isXlsx}, PostAnalytics: ${isPostAnalytics}`);
           
-          return isNewDownload && isXlsx && isPostAnalytics && hasExactPostId;
+          return isNewDownload && isXlsx && isPostAnalytics;
         });
 
-        if (finalExactMatches.length > 0) {
-          logger.log(`✅ EXACT MATCH found after extended wait: ${finalExactMatches[0].filename}`);
-          resolve(finalExactMatches[0]);
+        if (postAnalyticsFiles.length > 0) {
+          const downloadInfo = postAnalyticsFiles[0];
+          const filenamePostId = downloadInfo.filename.match(/(\d{19})/);
+          
+          logger.log(`✅ PostAnalytics file found after extended wait: ${downloadInfo.filename}`);
+          logger.log(`📊 URL post_id: ${urlPostId} | File post_id: ${filenamePostId ? filenamePostId[1] : 'unknown'}`);
+          logger.log(`🎯 API will receive URL post_id (${urlPostId})`);
+          
+          resolve(downloadInfo);
         } else {
-          // Final attempt - STILL require exact match
+          // Final attempt
           setTimeout(() => {
             chrome.downloads.search({ limit: 25 }, (veryFinalItems) => {
-              const veryFinalExactMatches = veryFinalItems.filter(item => {
+              const veryFinalPostAnalyticsFiles = veryFinalItems.filter(item => {
                 const isNewDownload = !downloadsBeforeExport.includes(item.id);
                 const isXlsx = item.filename.endsWith('.xlsx');
                 const isPostAnalytics = item.filename.toLowerCase().includes('postanalytics');
-                const hasExactPostId = currentPostId ? item.filename.includes(currentPostId) : false;
                 
-                logger.log(`Final check: ${item.filename} - New: ${isNewDownload}, XLSX: ${isXlsx}, PostAnalytics: ${isPostAnalytics}, ExactMatch: ${hasExactPostId}`);
+                logger.log(`Final check: ${item.filename} - New: ${isNewDownload}, XLSX: ${isXlsx}, PostAnalytics: ${isPostAnalytics}`);
                 
-                return isNewDownload && isXlsx && isPostAnalytics && hasExactPostId;
+                return isNewDownload && isXlsx && isPostAnalytics;
               });
 
-              if (veryFinalExactMatches.length > 0) {
-                logger.log(`✅ EXACT MATCH found after final wait: ${veryFinalExactMatches[0].filename}`);
-                resolve(veryFinalExactMatches[0]);
+              if (veryFinalPostAnalyticsFiles.length > 0) {
+                const downloadInfo = veryFinalPostAnalyticsFiles[0];
+                const filenamePostId = downloadInfo.filename.match(/(\d{19})/);
+                
+                logger.log(`✅ PostAnalytics file found after final wait: ${downloadInfo.filename}`);
+                logger.log(`📊 URL post_id: ${urlPostId} | File post_id: ${filenamePostId ? filenamePostId[1] : 'unknown'}`);
+                logger.log(`🎯 API will receive URL post_id (${urlPostId})`);
+                
+                resolve(downloadInfo);
               } else {
-                logger.error(`❌ CRITICAL: No PostAnalytics file with exact post_id ${currentPostId} found after multiple attempts`);
-                logger.error('This indicates the LinkedIn export did not work or generated wrong file');
-                
-                // Log all available downloads for debugging
-                logger.log('All available new downloads:');
+                logger.error(`❌ No PostAnalytics file detected after multiple attempts for URL post_id: ${urlPostId}`);
+                logger.log('Available new downloads:');
                 veryFinalItems.filter(item => !downloadsBeforeExport.includes(item.id))
-                  .forEach(item => {
-                    const filePostId = item.filename.match(/(\d{19})/);
-                    logger.log(`  - ${item.filename} (Post ID: ${filePostId ? filePostId[1] : 'none'})`);
-                  });
+                  .forEach(item => logger.log(`  - ${item.filename}`));
                 
-                reject(new Error(`STRICT VALIDATION FAILED: No PostAnalytics file with exact post_id ${currentPostId} detected. Refusing to upload wrong file.`));
+                reject(new Error(`No PostAnalytics file detected after export for URL post_id: ${urlPostId}`));
               }
             });
-          }, 5000); // Additional 5 second wait
+          }, 5000);
         }
       });
-    }, 5000); // Extended to 5 seconds
+    }, 5000);
   },
 
   /**
@@ -3159,17 +3170,20 @@ const AdvancedPostAnalytics = {
         return { success: false, error: fileError.message };
       }
 
-      // Extract post_id from analytics URL
+      // Extract post_id from analytics URL (this is the correct post_id for API)
       const postIdMatch = analyticsUrl.match(/urn:li:activity:(\d+)/);
-      const postId = postIdMatch ? postIdMatch[1] : 'unknown';
+      const urlPostId = postIdMatch ? postIdMatch[1] : 'unknown';
       
       // Extract just the filename from the full path
       const fullPath = downloadInfo.filename;
-      const filename = fullPath.split('\\').pop().split('/').pop(); // Handle both Windows (\) and Unix (/) paths
+      const filename = fullPath.split('\\').pop().split('/').pop();
       
-      // Validate that we have the correct file before upload
+      // Extract post_id from filename for logging comparison
+      const filenamePostIdMatch = filename.match(/(\d{19})/);
+      const filenamePostId = filenamePostIdMatch ? filenamePostIdMatch[1] : 'unknown';
+      
+      // Validate that we have a PostAnalytics file
       const isPostAnalyticsFile = filename.toLowerCase().includes('postanalytics');
-      const hasMatchingPostId = filename.includes(postId);
       
       if (!isPostAnalyticsFile) {
         const errorMsg = `CRITICAL ERROR: File is not a PostAnalytics file: ${filename}`;
@@ -3177,30 +3191,21 @@ const AdvancedPostAnalytics = {
         return { success: false, error: errorMsg };
       }
       
-      if (isPostAnalyticsFile && !hasMatchingPostId) {
-        const errorMsg = `CRITICAL ERROR: PostAnalytics file has wrong post_id. Expected: ${postId}, Got file: ${filename}`;
-        logger.error(errorMsg);
-        return { success: false, error: errorMsg };
-      }
+      logger.log(`✅ VALIDATION PASSED: PostAnalytics file detected: ${filename}`);
+      logger.log(`📊 URL post_id: ${urlPostId} | File post_id: ${filenamePostId}`);
+      logger.log(`🎯 Sending URL post_id (${urlPostId}) to API - this is the correct identifier`);
       
-      if (isPostAnalyticsFile && hasMatchingPostId) {
-        logger.log(`✅ VALIDATION PASSED: Correct PostAnalytics file with matching post_id: ${filename}`);
-      } else {
-        const errorMsg = `VALIDATION FAILED: File validation error for ${filename}`;
-        logger.error(errorMsg);
-        return { success: false, error: errorMsg };
-      }
-      
-      // Prepare FormData for Lambda (same format as main upload)
+      // Prepare FormData for Lambda (use URL post_id, not filename post_id)
       const formData = new FormData();
       formData.append('Email', email);
-      formData.append('post_id', postId);
-      formData.append('filename', filename); // Now just the filename, not full path
+      formData.append('post_id', urlPostId); // Use URL post_id, not filename post_id
+      formData.append('filename', filename);
       formData.append('analytics_url', analyticsUrl);
       formData.append('file_validation', JSON.stringify({
         is_postanalytics_file: isPostAnalyticsFile,
-        has_matching_post_id: hasMatchingPostId,
-        expected_post_id: postId
+        url_post_id: urlPostId,
+        filename_post_id: filenamePostId,
+        post_ids_match: urlPostId === filenamePostId
       }));
       
       // Convert base64 back to blob for FormData
@@ -3212,8 +3217,9 @@ const AdvancedPostAnalytics = {
       const fileBlob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       formData.append('xlsx', fileBlob, filename); // Use filename here too
       
-      logger.log(`Uploading post analytics - Post ID: ${postId}, Filename: ${filename}`);
+      logger.log(`Uploading post analytics - URL post_id: ${urlPostId}, Filename: ${filename}`);
       logger.log(`Full path was: ${fullPath}`);
+      logger.log(`File post_id: ${filenamePostId} | API post_id: ${urlPostId}`);
       
       // Upload to API with FormData (same as main upload)
       logger.log(`Uploading to endpoint: ${API_ENDPOINT}`);
