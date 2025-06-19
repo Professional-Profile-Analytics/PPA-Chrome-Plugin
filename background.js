@@ -3076,11 +3076,15 @@ const AdvancedPostAnalytics = {
       const postIdMatch = analyticsUrl.match(/urn:li:activity:(\d+)/);
       const postId = postIdMatch ? postIdMatch[1] : 'unknown';
       
+      // Extract just the filename from the full path
+      const fullPath = downloadInfo.filename;
+      const filename = fullPath.split('\\').pop().split('/').pop(); // Handle both Windows (\) and Unix (/) paths
+      
       // Prepare FormData for Lambda (same format as main upload)
       const formData = new FormData();
       formData.append('Email', email);
       formData.append('post_id', postId);
-      formData.append('filename', downloadInfo.filename);
+      formData.append('filename', filename); // Now just the filename, not full path
       formData.append('analytics_url', analyticsUrl);
       
       // Convert base64 back to blob for FormData
@@ -3090,9 +3094,10 @@ const AdvancedPostAnalytics = {
         bytes[i] = binaryString.charCodeAt(i);
       }
       const fileBlob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      formData.append('xlsx', fileBlob, downloadInfo.filename);
+      formData.append('xlsx', fileBlob, filename); // Use filename here too
       
-      logger.log(`Uploading post analytics - Post ID: ${postId}, Filename: ${downloadInfo.filename}`);
+      logger.log(`Uploading post analytics - Post ID: ${postId}, Filename: ${filename}`);
+      logger.log(`Full path was: ${fullPath}`);
       
       // Upload to API with FormData (same as main upload)
       logger.log(`Uploading to endpoint: ${API_ENDPOINT}`);
