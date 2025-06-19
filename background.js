@@ -2914,14 +2914,14 @@ const AdvancedPostAnalytics = {
               title 
             } = results[0].result;
 
+            // More flexible loading criteria
+            const pageReady = readyState === 'complete' && !isLoading;
+            const hasContent = hasExportButton || hasAnalyticsContent;
+
             // Only log every few attempts to reduce verbosity
             if (attempts % 3 === 0 || pageReady) {
               logger.log(`Page loading... (${readyState}, ${exportButtonCount} export buttons)`);
             }
-
-            // More flexible loading criteria
-            const pageReady = readyState === 'complete' && !isLoading;
-            const hasContent = hasExportButton || hasAnalyticsContent;
 
             if (pageReady && hasContent) {
               clearInterval(checkInterval);
