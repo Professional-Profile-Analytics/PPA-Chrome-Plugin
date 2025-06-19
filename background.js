@@ -516,8 +516,17 @@ const LinkedInMultilingualAutomation = {
         } else {
           successMessage = `✅Success (${processed} posts processed)`;
         }
-      } else if (await configManager.getAdvancedPostStatistics()) {
-        successMessage = '✅Success (Advanced post statistics enabled)';
+      } else {
+        // Check if advanced post statistics is enabled
+        const advancedStatsEnabled = await new Promise((resolve) => {
+          chrome.storage.local.get(['advancedPostStats'], (result) => {
+            resolve(result.advancedPostStats || false);
+          });
+        });
+        
+        if (advancedStatsEnabled) {
+          successMessage = '✅Success (Advanced post statistics enabled)';
+        }
       }
 
       // Update successful execution status after all processing (including advanced statistics)
@@ -637,8 +646,17 @@ const LinkedInMultilingualAutomation = {
         } else {
           successMessage = `✅Success (${processed} posts processed)`;
         }
-      } else if (await configManager.getAdvancedPostStatistics()) {
-        successMessage = '✅Success (Advanced post statistics enabled)';
+      } else {
+        // Check if advanced post statistics is enabled
+        const advancedStatsEnabled = await new Promise((resolve) => {
+          chrome.storage.local.get(['advancedPostStats'], (result) => {
+            resolve(result.advancedPostStats || false);
+          });
+        });
+        
+        if (advancedStatsEnabled) {
+          successMessage = '✅Success (Advanced post statistics enabled)';
+        }
       }
 
       // Update successful execution status after all processing (including advanced statistics)
