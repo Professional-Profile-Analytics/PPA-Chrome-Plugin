@@ -3375,7 +3375,7 @@ const AdvancedPostAnalytics = {
       }
 
       const result = await response.json();
-      logger.log(`Single post analytics uploaded successfully: ${downloadInfo.filename}`);
+      logger.log(`Post analytics uploaded successfully`);
 
       return { success: true, result: result };
 
