@@ -68,8 +68,6 @@ jobs:
         - popup.html/css/js: Extension popup interface  
         - options.html/css/js: Extension settings page
         - icons/: Extension icon files
-        - install-extension.ps1: Windows installation helper
-        - install-extension.bat: Windows batch installation helper
         
         This is NOT an executable program - it's a Chrome Extension that runs in the browser.
         INFOEOF
@@ -166,9 +164,6 @@ jobs:
           2. Open Chrome -> Extensions (chrome://extensions/)
           3. Enable Developer Mode
           4. Click "Load unpacked" and select the extracted folder
-          
-          Source Code: https://github.com/[your-repo]/PPA-Chrome-Plugin
-          License: See LICENSE file in package
           
           This package is automatically built by GitHub Actions.
           READMEEOF
