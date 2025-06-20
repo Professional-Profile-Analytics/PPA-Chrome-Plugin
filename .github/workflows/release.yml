@@ -9,11 +9,11 @@ jobs:
   build-extension:
     name: Build Chrome Extension Package
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-      
+
     - name: Get version from tag
       id: get_version
       run: |
@@ -26,13 +26,13 @@ jobs:
         fi
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
         echo "Extension version: $VERSION"
-        
+
 
     - name: Create extension package directory
       run: |
         mkdir -p chrome-extension-package
         echo "Created package directory"
-        
+
     - name: Copy Chrome extension files
       run: |
         # Copy all files except excluded ones
@@ -47,33 +47,33 @@ jobs:
           --exclude='.github/' \
           --exclude='chrome-extension-package/' \
           ./ chrome-extension-package/
-          
+
         # Add package identification files to help with virus scanners
         cd chrome-extension-package
-        
+
         cd ..
         echo "Files copied to package directory:"
         ls -la chrome-extension-package/
-        
+
     - name: Validate extension package
       run: |
         cd chrome-extension-package
-        
+
         # Check required files exist
         REQUIRED_FILES=("manifest.json" "background.js" "popup.html" "options.html")
         MISSING_FILES=()
-        
+
         for file in "${REQUIRED_FILES[@]}"; do
           if [ ! -f "$file" ]; then
             MISSING_FILES+=("$file")
           fi
         done
-        
+
         if [ ${#MISSING_FILES[@]} -ne 0 ]; then
           echo "❌ Missing required files: ${MISSING_FILES[*]}"
           exit 1
         fi
-        
+
         # Validate manifest.json
         if command -v jq &> /dev/null; then
           if ! jq empty manifest.json; then
@@ -88,15 +88,15 @@ jobs:
           fi
           echo "✅ manifest.json is valid JSON"
         fi
-        
+
         # Show package contents
         echo "📦 Extension package contents:"
         find . -type f | sort
-        
+
         # Show package size
         PACKAGE_SIZE=$(du -sh . | cut -f1)
         echo "📊 Package size: $PACKAGE_SIZE"
-        
+
     - name: Create ZIP package
       run: |
         # Create ZIP with shorter, cleaner filename
@@ -104,8 +104,13 @@ jobs:
         # Remove 'v' prefix if present for cleaner version number
         CLEAN_VERSION=${VERSION#v}
         ZIP_NAME="ppa-chrome-extension-${CLEAN_VERSION}.zip"
-        
-        # Create README.txt in the package directory first
+
+        echo "Creating ZIP package: $ZIP_NAME"
+        echo "Working directory: $(pwd)"
+        echo "Package directory contents:"
+        ls -la chrome-extension-package/
+
+        # Create README.txt in the package directory
         cd chrome-extension-package
         echo "PPA Chrome Extension Package" > README.txt
         echo "============================" >> README.txt
@@ -126,106 +131,35 @@ jobs:
         echo "4. Click \"Load unpacked\" and select the extracted folder" >> README.txt
         echo "" >> README.txt
         echo "This package is automatically built by GitHub Actions." >> README.txt
-        
-        # Create ZIP with all files at root level (not in a subfolder)
-        zip -r "../$ZIP_NAME" . -x "*.DS_Store" "Thumbs.db" -9
-        
+
+        echo "Files to be zipped:"
+        ls -la
+
+        # Create ZIP excluding any existing ZIP files to prevent nesting
+        zip -r "../$ZIP_NAME" . -x "*.DS_Store" "Thumbs.db" "*.zip" -9
+
         cd ..
-        
-        # Verify ZIP was created
+
+        # Verify ZIP was created and show its contents
         if [ -f "$ZIP_NAME" ]; then
           ZIP_SIZE=$(ls -lh "$ZIP_NAME" | awk '{print $5}')
           echo "✅ Created ZIP package: $ZIP_NAME ($ZIP_SIZE)"
-          
+
           # Show ZIP contents for verification
           echo "📋 ZIP contents:"
-          unzip -l "$ZIP_NAME"
+          unzip -l "$ZIP_NAME" | head -20
+
+          # Count files in ZIP
+          FILE_COUNT=$(unzip -l "$ZIP_NAME" | grep -c "^[[:space:]]*[0-9]")
+          echo "📊 Total files in ZIP: $FILE_COUNT"
+
         else
           echo "❌ Failed to create ZIP package"
           exit 1
         fi
-        
+
         # Store ZIP name for later steps
         echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
-        
-    - name: Generate release notes
-      id: release_notes
-      run: |
-        VERSION="${{ steps.get_version.outputs.VERSION }}"
-        ZIP_NAME="${{ env.ZIP_NAME }}"
-        
-        # Create release notes
-        cat > release-notes.md << EOF
-        # PPA Chrome Extension ${VERSION}
-        
-        ## 📦 Installation Package
-        
-        **Download:** \`${ZIP_NAME}\`
-        
-        ## 🚀 Installation Instructions
-        
-        1. **Download** the ZIP file above
-        2. **Extract** the ZIP file to a folder
-        3. **Open Chrome** and go to \`chrome://extensions/\`
-        4. **Enable Developer mode** (toggle in top right)
-        5. **Click "Load unpacked"** and select the extracted folder
-        6. **Configure** your email in the extension options
-        
-        ## 🛡️ Security Note
-        
-        If your browser or antivirus flags this download:
-        - This is a **legitimate Chrome Extension** built from open source code
-        - The package is **automatically built** by GitHub Actions
-        - **Source code** is available in this repository
-        - You can **verify the contents** by extracting and inspecting the files
-        
-        ## 📋 Package Contents
-        
-        This package includes:
-        - ✅ Chrome Extension Manifest (v3)
-        - ✅ Background Service Worker
-        - ✅ Options Page (Bootstrap 5 UI)
-        - ✅ Popup Interface
-        - ✅ Content Scripts
-        - ✅ Advanced Post Analytics
-        - ✅ Multi-language Support
-        - ✅ Shiny Integration
-        - ✅ All Required Assets
-        
-        ## 🧪 Quality Assurance
-        
-        - ✅ **69 automated tests** passed
-        - ✅ **Manifest validation** completed
-        - ✅ **File integrity** verified
-        - ✅ **Package structure** validated
-        
-        ## 🔧 Features
-        
-        - **LinkedIn Analytics Automation** - Automated download and upload
-        - **Advanced Post Statistics** - Individual post analytics with configurable limits (5-50 posts)
-        - **Company Page Analytics** - Weekly company analytics automation
-        - **Multi-language Support** - English, German, Spanish, French
-        - **Shiny Integration** - R Shiny app integration with human-like typing
-        - **Smart Retry System** - Automatic retry on failures
-        - **Clean Logging** - Comprehensive logging with progress tracking
-        
-        ## 📊 Technical Details
-        
-        - **Manifest Version:** 3 (latest Chrome standard)
-        - **Permissions:** Minimal required permissions
-        - **Architecture:** Service Worker based
-        - **Storage:** Chrome local storage
-        - **APIs:** WebRequest, Downloads, Tabs, Scripting
-        
-        ---
-        
-        **Built automatically by GitHub Actions**  
-        **Commit:** \`${GITHUB_SHA::8}\`  
-        **Build Date:** \`$(date -u +"%Y-%m-%d %H:%M:%S UTC")\`
-        EOF
-        
-        echo "Generated release notes:"
-        cat release-notes.md
         
     - name: Upload ZIP as artifact
       uses: actions/upload-artifact@v4
@@ -233,12 +167,12 @@ jobs:
         name: ppa-chrome-extension-${{ steps.get_version.outputs.VERSION }}
         path: ${{ env.ZIP_NAME }}
         retention-days: 90
-          
+
     - name: Create summary
       run: |
         VERSION="${{ steps.get_version.outputs.VERSION }}"
         ZIP_NAME="${{ env.ZIP_NAME }}"
-        
+
         echo "## 🎉 Chrome Extension Package Built Successfully" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### 📦 Package Details" >> $GITHUB_STEP_SUMMARY
