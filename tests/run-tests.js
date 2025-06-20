@@ -66,6 +66,11 @@ try {
       execSync('npx jest chromeApi.test.js --verbose', { stdio: 'inherit' });
       break;
       
+    case 'e2e':
+      console.log('Running End-to-End Workflow tests only...\n');
+      execSync('npx jest e2e.test.js --verbose', { stdio: 'inherit' });
+      break;
+      
     case 'install':
       console.log('Installing test dependencies...\n');
       execSync('npm install', { stdio: 'inherit' });
@@ -80,6 +85,7 @@ try {
       console.log('  node run-tests.js language    - Run Language Detection tests');
       console.log('  node run-tests.js upload      - Run File Upload Integration tests');
       console.log('  node run-tests.js chrome      - Run Chrome API Integration tests');
+      console.log('  node run-tests.js e2e         - Run End-to-End Workflow tests');
       break;
       
     case 'help':
@@ -94,6 +100,7 @@ try {
       console.log('  language  - Run Language Detection tests only');
       console.log('  upload    - Run File Upload Integration tests only');
       console.log('  chrome    - Run Chrome API Integration tests only');
+      console.log('  e2e       - Run End-to-End Workflow tests only');
       console.log('  install   - Install test dependencies');
       console.log('  help      - Show this help message');
       break;

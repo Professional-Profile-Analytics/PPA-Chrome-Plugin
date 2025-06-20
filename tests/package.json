@@ -11,7 +11,8 @@
     "test:download": "jest --testPathPattern=downloadTracking",
     "test:language": "jest --testPathPattern=languageDetection",
     "test:upload": "jest --testPathPattern=fileUpload",
-    "test:chrome": "jest --testPathPattern=chromeApi"
+    "test:chrome": "jest --testPathPattern=chromeApi",
+    "test:e2e": "jest --testPathPattern=e2e"
   },
   "devDependencies": {
     "jest": "^27.5.1",
