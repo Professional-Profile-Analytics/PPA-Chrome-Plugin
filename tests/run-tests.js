@@ -41,14 +41,20 @@ try {
       execSync('npm run test:config', { stdio: 'inherit' });
       break;
       
+    case 'analytics':
+      console.log('Running Advanced Post Analytics tests only...\n');
+      execSync('npx jest advancedPostAnalytics.test.js --verbose', { stdio: 'inherit' });
+      break;
+      
     case 'install':
       console.log('Installing test dependencies...\n');
       execSync('npm install', { stdio: 'inherit' });
       console.log('\n✅ Test dependencies installed successfully!');
       console.log('\nNext steps:');
-      console.log('  npm test          - Run all tests');
-      console.log('  npm run test:watch - Run tests in watch mode');
+      console.log('  npm test              - Run all tests');
+      console.log('  npm run test:watch    - Run tests in watch mode');
       console.log('  npm run test:coverage - Run tests with coverage');
+      console.log('  node run-tests.js analytics - Run Advanced Post Analytics tests');
       break;
       
     case 'help':
@@ -58,6 +64,7 @@ try {
       console.log('  watch     - Run tests in watch mode');
       console.log('  coverage  - Run tests with coverage report');
       console.log('  config    - Run ConfigManager tests only');
+      console.log('  analytics - Run Advanced Post Analytics tests only');
       console.log('  install   - Install test dependencies');
       console.log('  help      - Show this help message');
       break;

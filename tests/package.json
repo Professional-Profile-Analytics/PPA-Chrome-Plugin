@@ -6,7 +6,8 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "test:config": "jest --testPathPattern=config"
+    "test:config": "jest --testPathPattern=config",
+    "test:analytics": "jest --testPathPattern=advancedPostAnalytics"
   },
   "devDependencies": {
     "jest": "^27.5.1",
