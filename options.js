@@ -132,6 +132,23 @@ document.addEventListener("DOMContentLoaded", function () {
 
 });
 
+// Debug configuration - set to false for production
+const DEBUG_MODE = false;
+
+// Enhanced Logger with conditional logging
+const Logger = {
+  log: (message) => {
+    if (DEBUG_MODE) Logger.log(message);
+  },
+  warn: (message) => {
+    if (DEBUG_MODE) console.warn(message);
+  },
+  error: (message) => {
+    // Always log errors, even in production
+    console.error(message);
+  }
+};
+
 // Function to show status messages with proper styling
 function showStatusMessage(elementId, message, type) {
   const statusElement = document.getElementById(elementId);
@@ -167,7 +184,7 @@ function updateNextExecutionDisplay(interval) {
 document.getElementById('run-script').addEventListener('click', () => {
   // Set alarmsEnabled to true when manually running the script
   chrome.storage.local.set({ alarmsEnabled: true }, () => {
-    console.log("alarmsEnabled flag set to true when manually running script");
+    Logger.log("alarmsEnabled flag set to true when manually running script");
   });
   
   chrome.runtime.sendMessage({ action: 'executeScript' });
@@ -184,10 +201,10 @@ document.getElementById('run-company-script').addEventListener('click', () => {
     
     // Set alarmsEnabled to true when manually running the script
     chrome.storage.local.set({ alarmsEnabled: true }, () => {
-      console.log("alarmsEnabled flag set to true when manually running company script");
+      Logger.log("alarmsEnabled flag set to true when manually running company script");
     });
     
-    // TODO: Send message to background script to execute company analytics
+    // Send message to background script to execute company analytics
     chrome.runtime.sendMessage({ 
       action: 'executeCompanyScript',
       companyId: data.companyId 
@@ -305,7 +322,7 @@ function updateCompanyExecutionDisplays() {
 document.addEventListener("DOMContentLoaded", () => {
     // Force set alarmsEnabled to true when options page is opened
     chrome.storage.local.set({ alarmsEnabled: true }, () => {
-        console.log("alarmsEnabled flag set to true from options page");
+        Logger.log("alarmsEnabled flag set to true from options page");
     });
     
     chrome.storage.local.get("alarmsEnabled", (data) => {

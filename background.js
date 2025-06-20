@@ -8,13 +8,33 @@
  * to open tabs and simulate human typing.
  */
 
+// Debug configuration - set to false for production
+const DEBUG_MODE = false;
+
+// Enhanced Logger with conditional logging
+const Logger = {
+  log: (message) => {
+    if (DEBUG_MODE) Logger.log(message);
+  },
+  warn: (message) => {
+    if (DEBUG_MODE) Logger.warn(message);
+  },
+  error: (message) => {
+    // Always log errors, even in production
+    Logger.error(message);
+  },
+  info: (message) => {
+    if (DEBUG_MODE) console.info(message);
+  }
+};
+
 // Force reset retry count on startup
 chrome.storage.local.get(['retryCount'], (data) => {
   if (data.retryCount) {
-    console.log(`Found existing retry count on startup: ${data.retryCount}. Resetting to 0.`);
+    Logger.log(`Found existing retry count on startup: ${data.retryCount}. Resetting to 0.`);
     chrome.storage.local.set({ retryCount: 0 });
     chrome.storage.local.remove(['nextRetryTime', 'retryScheduled']);
-    console.log('Retry count reset to 0 and retry flags cleared on startup.');
+    Logger.log('Retry count reset to 0 and retry flags cleared on startup.');
   }
 });
 
@@ -317,15 +337,15 @@ const MultilingualTabInteractions = {
           for (const text of texts) {
             const link = links.find((a) => a.textContent.includes(text));
             if (link) {
-              console.log(`Found link with text: ${text}`);
+              Logger.log(`Found link with text: ${text}`);
               link.scrollIntoView({ behavior: "smooth", block: "center" });
               setTimeout(() => {
                 try {
-                  console.log(`Clicking link with text: ${text}`);
+                  Logger.log(`Clicking link with text: ${text}`);
                   link.click();
                   linkFound = true;
                 } catch (e) {
-                  console.error(`Error clicking link: ${e.message}`);
+                  Logger.error(`Error clicking link: ${e.message}`);
                 }
               }, 500);
               linkFound = true;
@@ -871,7 +891,7 @@ const Logger = {
    */
   log(message, level = 'info') {
     const timestamp = new Date().toISOString();
-    console.log(`[${level.toUpperCase()}] ${timestamp}: ${message}`);
+    Logger.log(`[${level.toUpperCase()}] ${timestamp}: ${message}`);
 
     // Store logs in chrome storage for persistent logging
     chrome.storage.local.get(['logs'], (result) => {
@@ -1835,14 +1855,14 @@ function findAndClickCompanyExportButton() {
       if (text && exportTexts.some(exportText =>
         text.toLowerCase().includes(exportText.toLowerCase())
       )) {
-        console.log(`Found company export button with text: ${text}`);
+        Logger.log(`Found company export button with text: ${text}`);
         element.click();
         return true;
       }
     }
   }
 
-  console.log('Company export button not found');
+  Logger.log('Company export button not found');
   return false;
 }
 
@@ -1850,7 +1870,7 @@ function findAndClickCompanyExportButton() {
  * Function to be injected to find and click the second export button in popup/modal
  */
 function findAndClickSecondExportButton() {
-  console.log('Looking for second export button in popup/modal...');
+  Logger.log('Looking for second export button in popup/modal...');
 
   // Multi-language export button texts
   const exportTexts = [
@@ -1876,7 +1896,7 @@ function findAndClickSecondExportButton() {
     const modals = document.querySelectorAll(modalSelector);
     for (const modal of modals) {
       if (modal.offsetParent !== null) { // Check if modal is visible
-        console.log(`Found visible modal: ${modalSelector}`);
+        Logger.log(`Found visible modal: ${modalSelector}`);
 
         const buttons = modal.querySelectorAll('button, [role="button"], .artdeco-button, a');
         for (const button of buttons) {
@@ -1884,7 +1904,7 @@ function findAndClickSecondExportButton() {
           if (text && exportTexts.some(exportText =>
             text.toLowerCase().includes(exportText.toLowerCase())
           )) {
-            console.log(`Found second export button in modal with text: ${text}`);
+            Logger.log(`Found second export button in modal with text: ${text}`);
             button.click();
             return true;
           }
@@ -1904,7 +1924,7 @@ function findAndClickSecondExportButton() {
         // Make sure this is not the same button we clicked before
         const rect = button.getBoundingClientRect();
         if (rect.width > 0 && rect.height > 0) {
-          console.log(`Found visible second export button with text: ${text}`);
+          Logger.log(`Found visible second export button with text: ${text}`);
           button.click();
           return true;
         }
@@ -1912,7 +1932,7 @@ function findAndClickSecondExportButton() {
     }
   }
 
-  console.log('Second export button not found in popup/modal');
+  Logger.log('Second export button not found in popup/modal');
   return false;
 }
 
@@ -1920,7 +1940,7 @@ function findAndClickSecondExportButton() {
  * Function to be injected to find alternative export buttons or download options
  */
 function findAndClickAlternativeExportButton() {
-  console.log('Looking for alternative export/download buttons...');
+  Logger.log('Looking for alternative export/download buttons...');
 
   // Alternative texts that might appear
   const alternativeTexts = [
@@ -1951,7 +1971,7 @@ function findAndClickAlternativeExportButton() {
       if (alternativeTexts.some(altText =>
         textToCheck.includes(altText.toLowerCase())
       )) {
-        console.log(`Found alternative export button with text: ${text || ariaLabel || title}`);
+        Logger.log(`Found alternative export button with text: ${text || ariaLabel || title}`);
         element.click();
         return true;
       }
@@ -1962,13 +1982,13 @@ function findAndClickAlternativeExportButton() {
   const downloadLinks = document.querySelectorAll('a[download], a[href*="download"], a[href*="export"]');
   for (const link of downloadLinks) {
     if (link.offsetParent !== null) {
-      console.log(`Found download link: ${link.href}`);
+      Logger.log(`Found download link: ${link.href}`);
       link.click();
       return true;
     }
   }
 
-  console.log('No alternative export buttons found');
+  Logger.log('No alternative export buttons found');
   return false;
 }
 
@@ -2042,18 +2062,18 @@ async function uploadCompanyFile(filename, companyId, email) {
             let justFilename = download.filename;
 
             // Debug: Log the original filename
-            console.log(`[DEBUG] Original filename: "${download.filename}"`);
+            Logger.log(`[DEBUG] Original filename: "${download.filename}"`);
 
             // Handle Windows paths (C:\Users\...)
             if (justFilename.includes('\\')) {
               justFilename = justFilename.split('\\').pop();
-              console.log(`[DEBUG] After Windows split: "${justFilename}"`);
+              Logger.log(`[DEBUG] After Windows split: "${justFilename}"`);
             }
 
             // Handle Unix paths (/home/user/...)
             if (justFilename.includes('/')) {
               justFilename = justFilename.split('/').pop();
-              console.log(`[DEBUG] After Unix split: "${justFilename}"`);
+              Logger.log(`[DEBUG] After Unix split: "${justFilename}"`);
             }
 
             // Fallback if extraction failed
@@ -2061,10 +2081,10 @@ async function uploadCompanyFile(filename, companyId, email) {
               // Try to extract from the end of the path using regex
               const match = download.filename.match(/[^\\\/]+$/);
               justFilename = match ? match[0] : 'company_analytics.xls';
-              console.log(`[DEBUG] After regex fallback: "${justFilename}"`);
+              Logger.log(`[DEBUG] After regex fallback: "${justFilename}"`);
             }
 
-            console.log(`[DEBUG] Final filename: "${justFilename}"`);
+            Logger.log(`[DEBUG] Final filename: "${justFilename}"`);
 
             // Prepare the payload for the company API
             const payload = {
@@ -2489,9 +2509,9 @@ function debugLog(message, data = null) {
   if (!DEBUG_MODE) return;
 
   const timestamp = new Date().toISOString();
-  console.log(`[PPA-DEBUG ${timestamp}] ${message}`);
+  Logger.log(`[PPA-DEBUG ${timestamp}] ${message}`);
   if (data) {
-    console.log('[PPA-DEBUG DATA]', data);
+    Logger.log('[PPA-DEBUG DATA]', data);
   }
 }
 
@@ -2571,7 +2591,7 @@ function createLinkedInPost(text, delay, autoSubmit) {
   try {
     // Check if the helper is available
     if (!window.linkedInPostHelper) {
-      console.error("LinkedIn post helper not found");
+      Logger.error("LinkedIn post helper not found");
       return { success: false, message: "LinkedIn post helper not found" };
     }
 
@@ -2641,7 +2661,7 @@ function createLinkedInPost(text, delay, autoSubmit) {
         return { success: false, message: error.message };
       });
   } catch (error) {
-    console.error("Error in createLinkedInPost:", error);
+    Logger.error("Error in createLinkedInPost:", error);
     return { success: false, message: error.message };
   }
 }
@@ -3109,7 +3129,7 @@ const AdvancedPostAnalytics = {
           for (const selector of exportSelectors) {
             exportButton = document.querySelector(selector);
             if (exportButton) {
-              console.log(`Found export button with selector: ${selector}`);
+              Logger.log(`Found export button with selector: ${selector}`);
               break;
             }
           }
@@ -3125,7 +3145,7 @@ const AdvancedPostAnalytics = {
             });
 
             if (exportButton) {
-              console.log(`Found export button by text search: ${exportButton.textContent || exportButton.getAttribute('aria-label')}`);
+              Logger.log(`Found export button by text search: ${exportButton.textContent || exportButton.getAttribute('aria-label')}`);
             }
           }
 

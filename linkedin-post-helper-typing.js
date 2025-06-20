@@ -7,12 +7,19 @@
  * 3. Type text into the editor character by character with variable timing
  */
 
+// Debug configuration - set to false for production
+const DEBUG_MODE = false;
+
 // Debug logging function
 function debugLog(message, data = null) {
-  const timestamp = new Date().toISOString();
-  console.log(`[PPA-DEBUG ${timestamp}] ${message}`);
-  if (data) {
-    console.log('[PPA-DEBUG DATA]', data);
+  if (DEBUG_MODE) {
+    const timestamp = new Date().toISOString();
+    console.log(`[PPA-DEBUG ${timestamp}] ${message}`);
+    if (data) {
+      console.log('[PPA-DEBUG DATA]', data);
+    }
+  }
+}
   }
 }
 

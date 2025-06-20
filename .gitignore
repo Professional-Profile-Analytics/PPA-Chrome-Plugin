@@ -1,20 +1,42 @@
-tests/node_modules/.bin/acorn
-tests/node_modules/.bin/browserslist
-tests/node_modules/.bin/escodegen
-tests/node_modules/.bin/esgenerate
-tests/node_modules/.bin/esparse
-tests/node_modules/.bin/esvalidate
-tests/node_modules/.bin/import-local-fixture
-tests/node_modules/.bin/jest
-tests/node_modules/.bin/js-yaml
-tests/node_modules/.bin/jsesc
-tests/node_modules/.bin/json5
-tests/node_modules/.bin/node-which
-tests/node_modules/.bin/parser
-tests/node_modules/.bin/resolve
-tests/node_modules/.bin/rimraf
-tests/node_modules/.bin/semver
-tests/node_modules/.bin/update-browserslist-db
-tests/node_modules/acorn-globals/node_modules/.bin/acorn
-tests/node_modules/jest-snapshot/node_modules/.bin/semver
-tests/node_modules/make-dir/node_modules/.bin/semver
+# Node modules
+tests/node_modules/
+node_modules/
+
+# Coverage reports
+tests/coverage/
+
+# Build artifacts
+dist/
+build/
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# IDE files
+.vscode/
+.idea/
+*.sublime-*
+
+# Temporary files
+*.tmp
+*.bak
+*.log
+*~
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Package manager files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Chrome extension development
+*.crx
+*.pem

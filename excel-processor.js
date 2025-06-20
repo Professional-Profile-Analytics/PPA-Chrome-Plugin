@@ -3,6 +3,20 @@
  * Handles reading Excel files and extracting post URLs for detailed analytics
  */
 
+// Debug configuration - set to false for production
+const DEBUG_MODE = false;
+
+// Enhanced Logger with conditional logging
+const Logger = {
+  log: (message) => {
+    if (DEBUG_MODE) Logger.log(`[Excel Processor] ${message}`);
+  },
+  error: (message) => {
+    // Always log errors, even in production
+    Logger.error(`[Excel Processor Error] ${message}`);
+  }
+};
+
 class ExcelProcessor {
   /**
    * Read Excel file and extract post URLs from the 3rd tab
@@ -41,11 +55,11 @@ class ExcelProcessor {
             }
           }
           
-          console.log(`Extracted ${urls.length} LinkedIn post URLs from Excel file`);
+          Logger.log(`Extracted ${urls.length} LinkedIn post URLs from Excel file`);
           resolve(urls);
           
         } catch (error) {
-          console.error('Error processing Excel file:', error);
+          Logger.error('Error processing Excel file:', error);
           reject(new Error(`Failed to process Excel file: ${error.message}`));
         }
       };
@@ -92,12 +106,12 @@ class ExcelProcessor {
       
       // Transform to analytics URL format
       const analyticsUrl = `https://www.linkedin.com/analytics/post-summary/urn:li:activity:${activityUrn}/`;
-      console.log(`Transformed URL: ${postUrl} -> ${analyticsUrl}`);
+      Logger.log(`Transformed URL: ${postUrl} -> ${analyticsUrl}`);
       
       return analyticsUrl;
       
     } catch (error) {
-      console.error(`Error transforming URL ${postUrl}:`, error);
+      Logger.error(`Error transforming URL ${postUrl}:`, error);
       throw error;
     }
   }

@@ -5,11 +5,21 @@
  * for downloading analytics data.
  */
 
-// Logging utility for consistent logging format
+// Debug configuration - set to false for production
+const DEBUG_MODE = false;
+
+// Enhanced Logger with conditional logging for content script
 const Logger = {
-  log: (message) => console.log(`[PPA Content] ${message}`),
-  error: (message) => console.error(`[PPA Content Error] ${message}`),
-  warn: (message) => console.warn(`[PPA Content Warning] ${message}`)
+  log: (message) => {
+    if (DEBUG_MODE) console.log(`[PPA Content] ${message}`);
+  },
+  error: (message) => {
+    // Always log errors, even in production
+    console.error(`[PPA Content Error] ${message}`);
+  },
+  warn: (message) => {
+    if (DEBUG_MODE) console.warn(`[PPA Content Warning] ${message}`);
+  }
 };
 
 /**
