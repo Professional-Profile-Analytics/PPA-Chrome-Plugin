@@ -9,7 +9,8 @@
     "test:config": "jest --testPathPattern=config",
     "test:analytics": "jest --testPathPattern=advancedPostAnalytics",
     "test:download": "jest --testPathPattern=downloadTracking",
-    "test:language": "jest --testPathPattern=languageDetection"
+    "test:language": "jest --testPathPattern=languageDetection",
+    "test:upload": "jest --testPathPattern=fileUpload"
   },
   "devDependencies": {
     "jest": "^27.5.1",
