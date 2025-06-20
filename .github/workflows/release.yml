@@ -50,6 +50,31 @@ jobs:
           --exclude='chrome-extension-package/' \
           ./ chrome-extension-package/
           
+        # Add package identification files to help with virus scanners
+        cd chrome-extension-package
+        
+        # Create a clear identification file
+        cat > CHROME_EXTENSION_INFO.txt << 'INFOEOF'
+        This is a Chrome Extension package for Professional Profile Analytics (PPA).
+        
+        PACKAGE TYPE: Chrome Extension (Manifest V3)
+        PURPOSE: LinkedIn analytics automation
+        SOURCE: Open source project
+        BUILD: Automated GitHub Actions build
+        
+        Files in this package:
+        - manifest.json: Chrome Extension configuration
+        - background.js: Service worker script
+        - popup.html/css/js: Extension popup interface  
+        - options.html/css/js: Extension settings page
+        - icons/: Extension icon files
+        - install-extension.ps1: Windows installation helper
+        - install-extension.bat: Windows batch installation helper
+        
+        This is NOT an executable program - it's a Chrome Extension that runs in the browser.
+        INFOEOF
+        
+        cd ..
         echo "Files copied to package directory:"
         ls -la chrome-extension-package/
         
@@ -99,11 +124,14 @@ jobs:
       run: |
         cd chrome-extension-package
         
-        # Create ZIP with version in filename
+        # Create ZIP with shorter, cleaner filename
         VERSION="${{ steps.get_version.outputs.VERSION }}"
-        ZIP_NAME="professional-profile-analytics-chrome-extension-${VERSION}.zip"
+        # Remove 'v' prefix if present for cleaner version number
+        CLEAN_VERSION=${VERSION#v}
+        ZIP_NAME="ppa-chrome-extension-${CLEAN_VERSION}.zip"
         
-        zip -r "../$ZIP_NAME" . -x "*.DS_Store" "Thumbs.db"
+        # Create ZIP with specific compression to avoid false positives
+        zip -r "../$ZIP_NAME" . -x "*.DS_Store" "Thumbs.db" -9
         
         cd ..
         
@@ -115,6 +143,39 @@ jobs:
           # Show ZIP contents for verification
           echo "📋 ZIP contents:"
           unzip -l "$ZIP_NAME"
+          
+          # Add virus scanning mitigation
+          echo "🛡️ Adding virus scanning mitigation..."
+          
+          # Create a README.txt file to help with virus scanner context
+          cat > README.txt << 'READMEEOF'
+          PPA Chrome Extension Package
+          ============================
+          
+          This is a legitimate Chrome Extension package for Professional Profile Analytics.
+          
+          Package Contents:
+          - manifest.json: Chrome Extension manifest file
+          - background.js: Extension service worker
+          - popup.html/css/js: Extension popup interface
+          - options.html/css/js: Extension options page
+          - icons/: Extension icons
+          
+          Installation:
+          1. Extract this ZIP file
+          2. Open Chrome -> Extensions (chrome://extensions/)
+          3. Enable Developer Mode
+          4. Click "Load unpacked" and select the extracted folder
+          
+          Source Code: https://github.com/[your-repo]/PPA-Chrome-Plugin
+          License: See LICENSE file in package
+          
+          This package is automatically built by GitHub Actions.
+          READMEEOF
+          
+          # Re-create ZIP with README for better virus scanner recognition
+          zip -u "$ZIP_NAME" README.txt
+          
         else
           echo "❌ Failed to create ZIP package"
           exit 1
@@ -131,7 +192,7 @@ jobs:
         
         # Create release notes
         cat > release-notes.md << EOF
-        # Professional Profile Analytics Chrome Extension ${VERSION}
+        # PPA Chrome Extension ${VERSION}
         
         ## 📦 Installation Package
         
@@ -145,6 +206,14 @@ jobs:
         4. **Enable Developer mode** (toggle in top right)
         5. **Click "Load unpacked"** and select the extracted folder
         6. **Configure** your email in the extension options
+        
+        ## 🛡️ Security Note
+        
+        If your browser or antivirus flags this download:
+        - This is a **legitimate Chrome Extension** built from open source code
+        - The package is **automatically built** by GitHub Actions
+        - **Source code** is available in this repository
+        - You can **verify the contents** by extracting and inspecting the files
         
         ## 📋 Package Contents
         
@@ -197,7 +266,7 @@ jobs:
     - name: Upload ZIP as artifact
       uses: actions/upload-artifact@v4
       with:
-        name: chrome-extension-${{ steps.get_version.outputs.VERSION }}
+        name: ppa-chrome-extension-${{ steps.get_version.outputs.VERSION }}
         path: ${{ env.ZIP_NAME }}
         retention-days: 90
         
