@@ -29,31 +29,7 @@ jobs:
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
         echo "Extension version: $VERSION"
         
-    - name: Update manifest version
-      run: |
-        VERSION="${{ steps.get_version.outputs.VERSION }}"
-        # Remove 'v' prefix if present
-        VERSION_NUMBER=${VERSION#v}
-        
-        # Update version in manifest.json
-        if [ -f "manifest.json" ]; then
-          # Create backup
-          cp manifest.json manifest.json.backup
-          
-          # Update version using jq if available, otherwise use sed
-          if command -v jq &> /dev/null; then
-            jq --arg version "$VERSION_NUMBER" '.version = $version' manifest.json > manifest.json.tmp
-            mv manifest.json.tmp manifest.json
-          else
-            sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION_NUMBER\"/" manifest.json
-          fi
-          
-          echo "Updated manifest.json version to: $VERSION_NUMBER"
-          cat manifest.json | grep -A1 -B1 "version"
-        else
-          echo "Warning: manifest.json not found"
-        fi
-        
+
     - name: Create extension package directory
       run: |
         mkdir -p chrome-extension-package
@@ -72,7 +48,6 @@ jobs:
           --exclude='jest.config.*' \
           --exclude='.github/' \
           --exclude='chrome-extension-package/' \
-          --exclude='manifest.json.backup' \
           ./ chrome-extension-package/
           
         echo "Files copied to package directory:"
