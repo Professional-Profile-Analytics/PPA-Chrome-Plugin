@@ -97,19 +97,12 @@ jobs:
         PACKAGE_SIZE=$(du -sh . | cut -f1)
         echo "📊 Package size: $PACKAGE_SIZE"
 
-    - name: Create ZIP package
+    - name: Prepare extension package
       run: |
-        # Create ZIP with shorter, cleaner filename
+        # Get version for naming
         VERSION="${{ steps.get_version.outputs.VERSION }}"
-        # Remove 'v' prefix if present for cleaner version number
-        CLEAN_VERSION=${VERSION#v}
-        ZIP_NAME="ppa-chrome-extension-${CLEAN_VERSION}.zip"
-
-        echo "Creating ZIP package: $ZIP_NAME"
-        echo "Working directory: $(pwd)"
-        echo "Package directory contents:"
-        ls -la chrome-extension-package/
-
+        echo "Preparing extension package for version: $VERSION"
+        
         # Create README.txt in the package directory
         cd chrome-extension-package
         echo "PPA Chrome Extension Package" > README.txt
@@ -131,41 +124,18 @@ jobs:
         echo "4. Click \"Load unpacked\" and select the extracted folder" >> README.txt
         echo "" >> README.txt
         echo "This package is automatically built by GitHub Actions." >> README.txt
-
-        echo "Files to be zipped:"
-        ls -la
-
-        # Create ZIP excluding any existing ZIP files to prevent nesting
-        zip -r "../$ZIP_NAME" . -x "*.DS_Store" "Thumbs.db" "*.zip" -9
-
-        cd ..
-
-        # Verify ZIP was created and show its contents
-        if [ -f "$ZIP_NAME" ]; then
-          ZIP_SIZE=$(ls -lh "$ZIP_NAME" | awk '{print $5}')
-          echo "✅ Created ZIP package: $ZIP_NAME ($ZIP_SIZE)"
-
-          # Show ZIP contents for verification
-          echo "📋 ZIP contents:"
-          unzip -l "$ZIP_NAME" | head -20
-
-          # Count files in ZIP
-          FILE_COUNT=$(unzip -l "$ZIP_NAME" | grep -c "^[[:space:]]*[0-9]")
-          echo "📊 Total files in ZIP: $FILE_COUNT"
-
-        else
-          echo "❌ Failed to create ZIP package"
-          exit 1
-        fi
-
-        # Store ZIP name for later steps
-        echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
         
-    - name: Upload ZIP as artifact
+        echo "📦 Extension package contents:"
+        ls -la
+        
+        cd ..
+        echo "✅ Extension package prepared successfully"
+
+    - name: Upload extension files
       uses: actions/upload-artifact@v4
       with:
         name: ppa-chrome-extension-${{ steps.get_version.outputs.VERSION }}
-        path: ${{ env.ZIP_NAME }}
+        path: chrome-extension-package/
         retention-days: 90
 
     - name: Create summary
