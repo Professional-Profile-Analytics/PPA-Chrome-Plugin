@@ -1582,44 +1582,100 @@ async function executeCompanyPageSteps(tabId, companyId, email) {
 
         PersistentLogger.log('Company analytics page loaded, looking for first export button...');
 
-        // Wait a bit for the page to fully render
+        // Wait longer for the page to fully render - LinkedIn analytics pages can be slow
         setTimeout(() => {
-          // First, check if user has access to company analytics
-          chrome.scripting.executeScript({
-            target: { tabId },
-            function: () => {
-              // Check for common error messages or access issues
-              const pageText = document.body.textContent.toLowerCase();
-              const hasAccessError = pageText.includes('access denied') || 
-                                   pageText.includes('not authorized') || 
-                                   pageText.includes('permission') ||
-                                   pageText.includes('admin access required');
+          // First, wait for analytics content to load properly
+          const waitForAnalyticsContent = async (tabId, maxAttempts = 10) => {
+            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+              PersistentLogger.log(`🔄 Checking analytics content readiness (attempt ${attempt}/${maxAttempts})...`);
               
-              const hasAnalyticsContent = pageText.includes('analytics') || 
-                                        pageText.includes('insights') ||
-                                        pageText.includes('performance');
+              const contentCheck = await new Promise((resolve) => {
+                chrome.scripting.executeScript({
+                  target: { tabId },
+                  function: () => {
+                    const pageText = document.body.textContent.toLowerCase();
+                    
+                    // Check for loading indicators
+                    const isLoading = pageText.includes('loading') || 
+                                    pageText.includes('please wait') ||
+                                    document.querySelector('.loading, .spinner, [data-testid="loading"]');
+                    
+                    // Check for analytics content
+                    const hasAnalyticsContent = pageText.includes('analytics') || 
+                                              pageText.includes('insights') ||
+                                              pageText.includes('performance') ||
+                                              pageText.includes('impressions') ||
+                                              pageText.includes('engagement');
+                    
+                    // Check for export-related content
+                    const hasExportContent = pageText.includes('export') ||
+                                           document.querySelector('button, [role="button"]')?.textContent?.toLowerCase().includes('export');
+                    
+                    // Check for actual error messages (not loading states)
+                    const hasRealAccessError = (pageText.includes('access denied') || 
+                                              pageText.includes('not authorized')) &&
+                                              !isLoading && hasAnalyticsContent;
+                    
+                    return {
+                      isLoading,
+                      hasAnalyticsContent,
+                      hasExportContent,
+                      hasRealAccessError,
+                      currentUrl: window.location.href,
+                      pageTitle: document.title,
+                      buttonCount: document.querySelectorAll('button, [role="button"], .artdeco-button, a').length
+                    };
+                  }
+                }, (results) => {
+                  resolve(results && results[0] ? results[0].result : null);
+                });
+              });
               
-              return {
-                hasAccessError,
-                hasAnalyticsContent,
-                currentUrl: window.location.href,
-                pageTitle: document.title
-              };
-            }
-          }, (accessResults) => {
-            if (accessResults && accessResults[0] && accessResults[0].result) {
-              const access = accessResults[0].result;
-              
-              if (access.hasAccessError) {
-                chrome.downloads.onCreated.removeListener(downloadListener);
-                reject(new Error(`Company analytics access denied. User may not have admin permissions for company ${companyId}. Page: ${access.currentUrl}`));
-                return;
+              if (!contentCheck) {
+                PersistentLogger.log(`⚠️ Could not check page content (attempt ${attempt})`);
+                if (attempt < maxAttempts) {
+                  await new Promise(resolve => setTimeout(resolve, 2000));
+                  continue;
+                } else {
+                  return { ready: false, error: 'Could not access page content' };
+                }
               }
               
-              if (!access.hasAnalyticsContent) {
-                PersistentLogger.log(`⚠️ Warning: Page may not have loaded analytics content yet. URL: ${access.currentUrl}, Title: ${access.pageTitle}`);
+              PersistentLogger.log(`📊 Page state: Loading=${contentCheck.isLoading}, Analytics=${contentCheck.hasAnalyticsContent}, Export=${contentCheck.hasExportContent}, Buttons=${contentCheck.buttonCount}`);
+              
+              // Check for real access errors (not loading states)
+              if (contentCheck.hasRealAccessError) {
+                return { 
+                  ready: false, 
+                  error: `Company analytics access denied. User may not have admin permissions for company ${companyId}. Page: ${contentCheck.currentUrl}` 
+                };
+              }
+              
+              // Page is ready if it has analytics content and is not loading
+              if (contentCheck.hasAnalyticsContent && !contentCheck.isLoading && contentCheck.buttonCount > 0) {
+                PersistentLogger.log(`✅ Analytics page appears ready with ${contentCheck.buttonCount} clickable elements`);
+                return { ready: true, contentCheck };
+              }
+              
+              // Wait before next attempt
+              if (attempt < maxAttempts) {
+                PersistentLogger.log(`⏳ Page not ready yet, waiting 3 seconds before next check...`);
+                await new Promise(resolve => setTimeout(resolve, 3000));
               }
             }
+            
+            return { ready: false, error: 'Page did not load analytics content within expected time' };
+          };
+          
+          // Wait for content to be ready
+          waitForAnalyticsContent(tabId).then((readinessResult) => {
+            if (!readinessResult.ready) {
+              chrome.downloads.onCreated.removeListener(downloadListener);
+              reject(new Error(readinessResult.error));
+              return;
+            }
+            
+            PersistentLogger.log('🚀 Page is ready, proceeding with export button search...');
             
             // Proceed with export button search
             chrome.scripting.executeScript({
@@ -1666,8 +1722,11 @@ async function executeCompanyPageSteps(tabId, companyId, email) {
                 });
               }
             });
+          }).catch((error) => {
+            chrome.downloads.onCreated.removeListener(downloadListener);
+            reject(new Error(`Page readiness check failed: ${error.message}`));
           });
-        }, 3000);
+        }, 5000); // Increased from 3000 to 5000ms to allow more time for initial page load
       }
     });
 
