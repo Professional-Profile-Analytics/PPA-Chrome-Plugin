@@ -10,7 +10,8 @@
     "test:analytics": "jest --testPathPattern=advancedPostAnalytics",
     "test:download": "jest --testPathPattern=downloadTracking",
     "test:language": "jest --testPathPattern=languageDetection",
-    "test:upload": "jest --testPathPattern=fileUpload"
+    "test:upload": "jest --testPathPattern=fileUpload",
+    "test:chrome": "jest --testPathPattern=chromeApi"
   },
   "devDependencies": {
     "jest": "^27.5.1",

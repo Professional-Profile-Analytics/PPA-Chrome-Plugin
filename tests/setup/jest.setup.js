@@ -33,6 +33,8 @@ const chrome = {
   tabs: {
     create: jest.fn(),
     remove: jest.fn(),
+    update: jest.fn(),
+    query: jest.fn(),
     onUpdated: {
       addListener: jest.fn(),
       removeListener: jest.fn()
@@ -41,6 +43,7 @@ const chrome = {
   alarms: {
     create: jest.fn(),
     clear: jest.fn(),
+    get: jest.fn(),
     onAlarm: {
       addListener: jest.fn(),
       removeListener: jest.fn()
@@ -55,6 +58,16 @@ const chrome = {
   },
   scripting: {
     executeScript: jest.fn()
+  },
+  webRequest: {
+    onBeforeRequest: {
+      addListener: jest.fn(),
+      removeListener: jest.fn()
+    },
+    onHeadersReceived: {
+      addListener: jest.fn(),
+      removeListener: jest.fn()
+    }
   }
 };
 
