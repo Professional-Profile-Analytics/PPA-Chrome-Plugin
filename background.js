@@ -1587,7 +1587,10 @@ async function executeCompanyPageSteps(tabId, companyId, email) {
           // First, wait for analytics content to load properly
           const waitForAnalyticsContent = async (tabId, maxAttempts = 10) => {
             for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-              PersistentLogger.log(`🔄 Checking analytics content readiness (attempt ${attempt}/${maxAttempts})...`);
+              // Only log if we need multiple attempts (keep it clean for normal cases)
+              if (attempt > 1) {
+                PersistentLogger.log(`⏳ Waiting for analytics content to load (attempt ${attempt}/${maxAttempts})...`);
+              }
               
               const contentCheck = await new Promise((resolve) => {
                 chrome.scripting.executeScript({
@@ -1641,7 +1644,7 @@ async function executeCompanyPageSteps(tabId, companyId, email) {
                 }
               }
               
-              PersistentLogger.log(`📊 Page state: Loading=${contentCheck.isLoading}, Analytics=${contentCheck.hasAnalyticsContent}, Export=${contentCheck.hasExportContent}, Buttons=${contentCheck.buttonCount}`);
+              // Remove verbose page state logging - keep it simple
               
               // Check for real access errors (not loading states)
               if (contentCheck.hasRealAccessError) {
@@ -1653,7 +1656,7 @@ async function executeCompanyPageSteps(tabId, companyId, email) {
               
               // Page is ready if it has analytics content and is not loading
               if (contentCheck.hasAnalyticsContent && !contentCheck.isLoading && contentCheck.buttonCount > 0) {
-                PersistentLogger.log(`✅ Analytics page appears ready with ${contentCheck.buttonCount} clickable elements`);
+                PersistentLogger.log(`📊 Company analytics page ready (${contentCheck.buttonCount} elements available)`);
                 return { ready: true, contentCheck };
               }
               
@@ -1675,7 +1678,7 @@ async function executeCompanyPageSteps(tabId, companyId, email) {
               return;
             }
             
-            PersistentLogger.log('🚀 Page is ready, proceeding with export button search...');
+            // Page is ready, proceed with export button search
             
             // Proceed with export button search
             chrome.scripting.executeScript({
@@ -2255,19 +2258,15 @@ async function uploadCompanyFile(filename, companyId, email) {
             // Extract just the filename from the full path (handle both Windows and Unix paths)
             let justFilename = download.filename;
 
-            // Debug: Log the original filename
-            PersistentLogger.log(`[DEBUG] Original filename: "${download.filename}"`);
-
+            // Extract just the filename from the full path
             // Handle Windows paths (C:\Users\...)
             if (justFilename.includes('\\')) {
               justFilename = justFilename.split('\\').pop();
-              PersistentLogger.log(`[DEBUG] After Windows split: "${justFilename}"`);
             }
 
             // Handle Unix paths (/home/user/...)
             if (justFilename.includes('/')) {
               justFilename = justFilename.split('/').pop();
-              PersistentLogger.log(`[DEBUG] After Unix split: "${justFilename}"`);
             }
 
             // Fallback if extraction failed
@@ -2278,7 +2277,7 @@ async function uploadCompanyFile(filename, companyId, email) {
               PersistentLogger.log(`[DEBUG] After regex fallback: "${justFilename}"`);
             }
 
-            PersistentLogger.log(`[DEBUG] Final filename: "${justFilename}"`);
+            // Filename extracted successfully
 
             // Prepare the payload for the company API
             const payload = {
@@ -2908,7 +2907,6 @@ const AdvancedPostAnalytics = {
         try {
           // Transform URL to analytics format
           const analyticsUrl = this.transformToAnalyticsUrl(postUrl);
-          PersistentLogger.log(`📊 Transformed to analytics URL: ${analyticsUrl}`);
 
           // Navigate to the post analytics page
           await this.navigateToPostAnalytics(tabId, analyticsUrl, logger);
@@ -2964,7 +2962,7 @@ const AdvancedPostAnalytics = {
           if (i < limitedPostUrls.length - 1) {
             const delayTime = 8000 + Math.random() * 7000; // 8-15 second delay
             logger.log(`Waiting ${Math.round(delayTime/1000)} seconds before next post to avoid download blocking...`);
-            PersistentLogger.log(`⏳ Waiting ${Math.round(delayTime/1000)} seconds before processing next post (${i + 2}/${limitedPostUrls.length})`);
+            PersistentLogger.log(`⏳ Processing next post in ${Math.round(delayTime/1000)} seconds (${i + 2}/${limitedPostUrls.length})`);
             await this.delay(delayTime);
           }
 
