@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Professional Profile Analytics",
-  "version": "1.7.4",
+  "version": "1.7.5",
   "description": "Automates the download and upload of LinkedIn analytics data to the Professional Profile Analytics service",
   "permissions": [
     "storage",

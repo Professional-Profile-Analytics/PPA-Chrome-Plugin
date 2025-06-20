@@ -141,14 +141,19 @@ jobs:
     - name: Create summary
       run: |
         VERSION="${{ steps.get_version.outputs.VERSION }}"
-        ZIP_NAME="${{ env.ZIP_NAME }}"
+        
+        # Calculate total package size
+        PACKAGE_SIZE=$(du -sh chrome-extension-package | cut -f1)
+        FILE_COUNT=$(find chrome-extension-package -type f | wc -l)
 
         echo "## 🎉 Chrome Extension Package Built Successfully" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### 📦 Package Details" >> $GITHUB_STEP_SUMMARY
         echo "- **Version:** $VERSION" >> $GITHUB_STEP_SUMMARY
-        echo "- **Package:** $ZIP_NAME" >> $GITHUB_STEP_SUMMARY
-        echo "- **Size:** $(ls -lh $ZIP_NAME | awk '{print $5}')" >> $GITHUB_STEP_SUMMARY
+        echo "- **Package:** ppa-chrome-extension-$VERSION" >> $GITHUB_STEP_SUMMARY
+        echo "- **Total Size:** $PACKAGE_SIZE" >> $GITHUB_STEP_SUMMARY
+        echo "- **Files:** $FILE_COUNT files" >> $GITHUB_STEP_SUMMARY
+        echo "- **Format:** Chrome Extension folder (ready to load unpacked)" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### ✅ Validation Results" >> $GITHUB_STEP_SUMMARY
         echo "- Manifest.json: Valid ✅" >> $GITHUB_STEP_SUMMARY
@@ -157,3 +162,4 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### 📥 Download" >> $GITHUB_STEP_SUMMARY
         echo "The extension package is available as an artifact in this workflow run." >> $GITHUB_STEP_SUMMARY
+        echo "Download and extract the ZIP to get the Chrome Extension folder." >> $GITHUB_STEP_SUMMARY
