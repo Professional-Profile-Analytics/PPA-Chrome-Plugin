@@ -73,13 +73,19 @@ describe('Advanced Post Analytics', () => {
 
       // Helper method to extract post ID from URL
       extractPostIdFromUrl(url) {
+        if (!url || typeof url !== 'string') {
+          return null;
+        }
         const postIdMatch = url.match(/urn:li:activity:(\d+)/);
         return postIdMatch ? postIdMatch[1] : null;
       },
 
       // Helper method to validate LinkedIn analytics URL
       isValidAnalyticsUrl(url) {
-        return url && url.includes('linkedin.com/analytics/post-summary/urn:li:activity:');
+        if (!url || typeof url !== 'string') {
+          return false;
+        }
+        return url.includes('linkedin.com/analytics/post-summary/urn:li:activity:');
       }
     };
 
