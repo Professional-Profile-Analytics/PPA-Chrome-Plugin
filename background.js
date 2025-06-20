@@ -14,14 +14,14 @@ const DEBUG_MODE = false;
 // Enhanced Logger with conditional logging
 const Logger = {
   log: (message) => {
-    if (DEBUG_MODE) Logger.log(message);
+    if (DEBUG_MODE) console.log(message);
   },
   warn: (message) => {
-    if (DEBUG_MODE) Logger.warn(message);
+    if (DEBUG_MODE) console.warn(message);
   },
   error: (message) => {
     // Always log errors, even in production
-    Logger.error(message);
+    console.error(message);
   },
   info: (message) => {
     if (DEBUG_MODE) console.info(message);
@@ -881,9 +881,9 @@ let EXECUTION_INTERVAL = CONFIG.DEFAULT_EXECUTION_INTERVAL;
 // ============================================================================
 
 /**
- * Logging utility for consistent logging and storage of log messages
+ * Persistent logging utility for consistent logging and storage of log messages
  */
-const Logger = {
+const PersistentLogger = {
   /**
    * Log a message with specified level
    * @param {string} message - The message to log
@@ -891,7 +891,7 @@ const Logger = {
    */
   log(message, level = 'info') {
     const timestamp = new Date().toISOString();
-    Logger.log(`[${level.toUpperCase()}] ${timestamp}: ${message}`);
+    console.log(`[${level.toUpperCase()}] ${timestamp}: ${message}`);
 
     // Store logs in chrome storage for persistent logging
     chrome.storage.local.get(['logs'], (result) => {
@@ -1000,7 +1000,7 @@ const ConfigManager = {
         }, null, 2) : null,
         lastExecutionTime: statusRecord.timestamp
       }, () => {
-        Logger.log(`Execution status updated: ${status}`);
+        PersistentLogger.log(`Execution status updated: ${status}`);
         resolve();
       });
     });
@@ -1026,7 +1026,7 @@ const ConfigManager = {
   async updateRetryCount(count) {
     return new Promise((resolve) => {
       chrome.storage.local.set({ retryCount: count }, () => {
-        Logger.log(`Retry count updated: ${count}`);
+        PersistentLogger.log(`Retry count updated: ${count}`);
         resolve();
       });
     });
@@ -1039,7 +1039,7 @@ const ConfigManager = {
   async resetRetryCount() {
     return new Promise((resolve) => {
       chrome.storage.local.set({ retryCount: 0 }, () => {
-        Logger.log('Retry count reset to 0');
+        PersistentLogger.log('Retry count reset to 0');
         resolve();
       });
     });
@@ -1108,7 +1108,7 @@ async function initializeExecutionInterval() {
             EXECUTION_INTERVAL = CONFIG.DEFAULT_EXECUTION_INTERVAL; // 3 days (default)
         }
       }
-      Logger.log(`Execution interval set to ${EXECUTION_INTERVAL / (24 * 60 * 60 * 1000)} days`);
+      PersistentLogger.log(`Execution interval set to ${EXECUTION_INTERVAL / (24 * 60 * 60 * 1000)} days`);
       resolve();
     });
   });
@@ -1136,7 +1136,7 @@ const FileUploader = {
       }
 
       // Fetch the file
-      Logger.log(`Fetching file from URL: ${fileUrl}`);
+      PersistentLogger.log(`Fetching file from URL: ${fileUrl}`);
       const response = await fetch(fileUrl);
 
       if (!response.ok) {
@@ -1163,7 +1163,7 @@ const FileUploader = {
       formData.append("xlsx", fileBlob, fileName);
 
       // Upload to webhook
-      Logger.log('Uploading file to webhook...');
+      PersistentLogger.log('Uploading file to webhook...');
       const uploadResponse = await fetch(CONFIG.ENDPOINTS.WEBHOOK, {
         method: "POST",
         body: formData,
@@ -1176,7 +1176,7 @@ const FileUploader = {
         });
       }
 
-      Logger.log('File successfully uploaded');
+      PersistentLogger.log('File successfully uploaded');
       const apiResponse = await uploadResponse.json();
       
       // Handle Lambda response format with statusCode and body
@@ -1187,25 +1187,25 @@ const FileUploader = {
           try {
             responseBody = JSON.parse(responseBody);
           } catch (parseError) {
-            Logger.warn(`Failed to parse response body: ${parseError.message}`);
+            PersistentLogger.warn(`Failed to parse response body: ${parseError.message}`);
             responseBody = apiResponse.body;
           }
         }
         
-        Logger.log(`API response: ${responseBody.message || 'Success'}`);
+        PersistentLogger.log(`API response: ${responseBody.message || 'Success'}`);
         if (responseBody.extracted_urls) {
-          Logger.log(`Extracted ${responseBody.extracted_urls.length} analytics URLs from Excel file`);
+          PersistentLogger.log(`Extracted ${responseBody.extracted_urls.length} analytics URLs from Excel file`);
         }
         
         return responseBody;
       } else {
         // Fallback for direct response format
-        Logger.log(`API response: ${apiResponse.message || 'Success'}`);
+        PersistentLogger.log(`API response: ${apiResponse.message || 'Success'}`);
         return apiResponse;
       }
 
     } catch (error) {
-      Logger.error(`File upload error: ${error.message}`);
+      PersistentLogger.error(`File upload error: ${error.message}`);
       throw error;
     }
   }
@@ -1221,15 +1221,15 @@ const FileUploader = {
  */
 async function scheduleRetry() {
   const currentRetryCount = await ConfigManager.getRetryCount();
-  Logger.log(`Current retry count before scheduling: ${currentRetryCount}`);
+  PersistentLogger.log(`Current retry count before scheduling: ${currentRetryCount}`);
 
   // Reset retry count if it's already at or above the maximum
   if (currentRetryCount >= CONFIG.RETRY.MAX_ATTEMPTS) {
-    Logger.log(`Retry count ${currentRetryCount} is at or above maximum ${CONFIG.RETRY.MAX_ATTEMPTS}. Resetting to 0.`);
+    PersistentLogger.log(`Retry count ${currentRetryCount} is at or above maximum ${CONFIG.RETRY.MAX_ATTEMPTS}. Resetting to 0.`);
     await ConfigManager.resetRetryCount();
     // Clear retry flags
     chrome.storage.local.remove(['nextRetryTime', 'retryScheduled']);
-    Logger.log('Retry count has been reset to 0 and retry flags cleared.');
+    PersistentLogger.log('Retry count has been reset to 0 and retry flags cleared.');
     return;
   }
 
@@ -1250,8 +1250,8 @@ async function scheduleRetry() {
   // Create alarm for retry execution
   chrome.alarms.create(CONFIG.ALARMS.RETRY, { when: retryTime });
 
-  Logger.log(`Scheduled retry #${newRetryCount} in 2 minutes. Time: ${retryTimeISO}`);
-  Logger.log('Using alarm-based retry mechanism only');
+  PersistentLogger.log(`Scheduled retry #${newRetryCount} in 2 minutes. Time: ${retryTimeISO}`);
+  PersistentLogger.log('Using alarm-based retry mechanism only');
 }
 
 
@@ -1273,11 +1273,11 @@ async function runAutomationScript() {
 
     // Log the execution attempt with timestamp
     const timestamp = new Date().toISOString();
-    Logger.log(`=== AUTOMATION SCRIPT STARTED at ${timestamp} ===`);
+    PersistentLogger.log(`=== AUTOMATION SCRIPT STARTED at ${timestamp} ===`);
 
     // Randomly choose between the existing and new solution
     const useDirect = Math.random() < 0.5; // 50% chance for each
-    Logger.log(`Using direct approach: ${useDirect}`);
+    PersistentLogger.log(`Using direct approach: ${useDirect}`);
 
     if (useDirect) {
       // New solution: use executeStepsDirect with multi-language support
@@ -1287,13 +1287,13 @@ async function runAutomationScript() {
       }, async (tab) => {
         if (!tab || !tab.id) {
           const error = new Error('Failed to create tab');
-          Logger.error(`Tab creation failed: ${error.message}`);
+          PersistentLogger.error(`Tab creation failed: ${error.message}`);
           await scheduleRetry();
           return;
         }
 
         const tabId = tab.id;
-        Logger.log(`Created tab with ID: ${tabId}`);
+        PersistentLogger.log(`Created tab with ID: ${tabId}`);
 
         try {
           await LinkedInMultilingualAutomation.executeStepsDirect(
@@ -1308,19 +1308,19 @@ async function runAutomationScript() {
           await ConfigManager.resetRetryCount();
           // Clear retry flags
           chrome.storage.local.remove(['nextRetryTime', 'retryScheduled']);
-          Logger.log(`=== AUTOMATION COMPLETED SUCCESSFULLY at ${new Date().toISOString()} ===`);
+          PersistentLogger.log(`=== AUTOMATION COMPLETED SUCCESSFULLY at ${new Date().toISOString()} ===`);
 
           // Check if company page upload is needed
           await checkAndRunCompanyPageUpload();
         } catch (error) {
-          Logger.error(`Direct automation script failed: ${error.message}`);
+          PersistentLogger.error(`Direct automation script failed: ${error.message}`);
           await scheduleRetry();
           // Close the tab if it still exists
           try {
-            Logger.log(`Attempting to close tab ${tabId}`);
+            PersistentLogger.log(`Attempting to close tab ${tabId}`);
             chrome.tabs.remove(tabId);
           } catch (e) {
-            Logger.log(`Tab ${tabId} already closed or doesn't exist`);
+            PersistentLogger.log(`Tab ${tabId} already closed or doesn't exist`);
           }
         }
       });
@@ -1332,13 +1332,13 @@ async function runAutomationScript() {
       }, async (tab) => {
         if (!tab || !tab.id) {
           const error = new Error('Failed to create tab');
-          Logger.error(`Tab creation failed: ${error.message}`);
+          PersistentLogger.error(`Tab creation failed: ${error.message}`);
           await scheduleRetry();
           return;
         }
 
         const tabId = tab.id;
-        Logger.log(`Created tab with ID: ${tabId}`);
+        PersistentLogger.log(`Created tab with ID: ${tabId}`);
 
         try {
           await LinkedInMultilingualAutomation.executeSteps(
@@ -1353,25 +1353,25 @@ async function runAutomationScript() {
           await ConfigManager.resetRetryCount();
           // Clear retry flags
           chrome.storage.local.remove(['nextRetryTime', 'retryScheduled']);
-          Logger.log(`=== AUTOMATION COMPLETED SUCCESSFULLY at ${new Date().toISOString()} ===`);
+          PersistentLogger.log(`=== AUTOMATION COMPLETED SUCCESSFULLY at ${new Date().toISOString()} ===`);
 
           // Check if company page upload is needed
           await checkAndRunCompanyPageUpload();
         } catch (error) {
-          Logger.error(`Automation script failed: ${error.message}`);
+          PersistentLogger.error(`Automation script failed: ${error.message}`);
           await scheduleRetry();
           // Close the tab if it still exists
           try {
-            Logger.log(`Attempting to close tab ${tabId}`);
+            PersistentLogger.log(`Attempting to close tab ${tabId}`);
             chrome.tabs.remove(tabId);
           } catch (e) {
-            Logger.log(`Tab ${tabId} already closed or doesn't exist`);
+            PersistentLogger.log(`Tab ${tabId} already closed or doesn't exist`);
           }
         }
       });
     }
   } catch (error) {
-    Logger.error(`Automation initialization failed: ${error.message}`);
+    PersistentLogger.error(`Automation initialization failed: ${error.message}`);
     await ConfigManager.updateExecutionStatus('Failed', error);
     await scheduleRetry();
   }
@@ -1391,11 +1391,11 @@ async function checkAndRunCompanyPageUpload() {
   try {
     // Prevent multiple simultaneous executions
     if (companyAutomationRunning) {
-      Logger.log('Company automation already running, skipping duplicate request');
+      PersistentLogger.log('Company automation already running, skipping duplicate request');
       return;
     }
 
-    Logger.log('Checking if company page upload is needed...');
+    PersistentLogger.log('Checking if company page upload is needed...');
 
     // Get company ID from storage
     const result = await new Promise((resolve) => {
@@ -1403,7 +1403,7 @@ async function checkAndRunCompanyPageUpload() {
     });
 
     if (!result.companyId) {
-      Logger.log('No company ID configured, skipping company page upload');
+      PersistentLogger.log('No company ID configured, skipping company page upload');
       return;
     }
 
@@ -1414,16 +1414,16 @@ async function checkAndRunCompanyPageUpload() {
 
     // Check if last execution was more than 7 days ago or never executed
     if (!lastCompanyExecution || lastCompanyExecution < sevenDaysAgo) {
-      Logger.log(`Company page upload needed. Last execution: ${lastCompanyExecution ? new Date(lastCompanyExecution).toISOString() : 'Never'}`);
+      PersistentLogger.log(`Company page upload needed. Last execution: ${lastCompanyExecution ? new Date(lastCompanyExecution).toISOString() : 'Never'}`);
       await runCompanyPageAutomation(companyId);
     } else {
-      Logger.log(`Company page upload not needed. Last execution: ${new Date(lastCompanyExecution).toISOString()}`);
+      PersistentLogger.log(`Company page upload not needed. Last execution: ${new Date(lastCompanyExecution).toISOString()}`);
       // Update next execution time
       const nextExecution = lastCompanyExecution + (7 * 24 * 60 * 60 * 1000);
       chrome.storage.local.set({ nextCompanyExecution: nextExecution });
     }
   } catch (error) {
-    Logger.error(`Error checking company page upload: ${error.message}`);
+    PersistentLogger.error(`Error checking company page upload: ${error.message}`);
   }
 }
 
@@ -1436,7 +1436,7 @@ async function runCompanyPageAutomation(companyId) {
   companyAutomationRunning = true;
 
   try {
-    Logger.log(`Starting company page automation for company ${companyId}`);
+    PersistentLogger.log(`Starting company page automation for company ${companyId}`);
 
     // Update company execution status
     const now = Date.now();
@@ -1460,14 +1460,14 @@ async function runCompanyPageAutomation(companyId) {
     }, async (tab) => {
       if (!tab || !tab.id) {
         const error = new Error('Failed to create company analytics tab');
-        Logger.error(`Company tab creation failed: ${error.message}`);
+        PersistentLogger.error(`Company tab creation failed: ${error.message}`);
         await updateCompanyExecutionStatus('Failed', error);
         companyAutomationRunning = false; // Reset flag
         return;
       }
 
       const tabId = tab.id;
-      Logger.log(`Created company analytics tab with ID: ${tabId}`);
+      PersistentLogger.log(`Created company analytics tab with ID: ${tabId}`);
 
       try {
         await executeCompanyPageSteps(tabId, companyId, email);
@@ -1479,16 +1479,16 @@ async function runCompanyPageAutomation(companyId) {
         const nextExecution = now + (7 * 24 * 60 * 60 * 1000);
         chrome.storage.local.set({ nextCompanyExecution: nextExecution });
 
-        Logger.log(`Company page automation completed successfully`);
+        PersistentLogger.log(`Company page automation completed successfully`);
       } catch (error) {
-        Logger.error(`Company page automation failed: ${error.message}`);
+        PersistentLogger.error(`Company page automation failed: ${error.message}`);
         await updateCompanyExecutionStatus('Failed', error);
 
         // Close the tab if it still exists
         try {
           chrome.tabs.remove(tabId);
         } catch (e) {
-          Logger.log(`Company tab ${tabId} already closed or doesn't exist`);
+          PersistentLogger.log(`Company tab ${tabId} already closed or doesn't exist`);
         }
       } finally {
         // Always reset the running flag
@@ -1496,7 +1496,7 @@ async function runCompanyPageAutomation(companyId) {
       }
     });
   } catch (error) {
-    Logger.error(`Company page automation initialization failed: ${error.message}`);
+    PersistentLogger.error(`Company page automation initialization failed: ${error.message}`);
     await updateCompanyExecutionStatus('Failed', error);
     companyAutomationRunning = false; // Reset flag
   }
@@ -1527,7 +1527,7 @@ async function executeCompanyPageSteps(tabId, companyId, email) {
            downloadItem.filename.toLowerCase().includes('.xls'))) {
 
         downloadStarted = true;
-        Logger.log(`Company analytics download started: ${downloadItem.filename.split('/').pop() || downloadItem.filename.split('\\').pop()}`);
+        PersistentLogger.log(`Company analytics download started: ${downloadItem.filename.split('/').pop() || downloadItem.filename.split('\\').pop()}`);
 
         // Monitor download completion
         const checkDownload = () => {
@@ -1537,7 +1537,7 @@ async function executeCompanyPageSteps(tabId, companyId, email) {
 
               if (download.state === 'complete') {
                 downloadCompleted = true;
-                Logger.log(`Company analytics download completed successfully`);
+                PersistentLogger.log(`Company analytics download completed successfully`);
 
                 // Upload the file
                 uploadCompanyFile(download.filename, companyId, email)
@@ -1547,12 +1547,12 @@ async function executeCompanyPageSteps(tabId, companyId, email) {
                       chrome.tabs.remove(tabId, () => {
                         if (chrome.runtime.lastError) {
                           // Tab already closed or doesn't exist - this is fine
-                          Logger.log(`Tab ${tabId} was already closed`);
+                          PersistentLogger.log(`Tab ${tabId} was already closed`);
                         }
                       });
                     } catch (e) {
                       // Ignore tab removal errors
-                      Logger.log(`Tab ${tabId} cleanup skipped - already closed`);
+                      PersistentLogger.log(`Tab ${tabId} cleanup skipped - already closed`);
                     }
                     chrome.downloads.onCreated.removeListener(downloadListener);
                     resolve();
@@ -1580,7 +1580,7 @@ async function executeCompanyPageSteps(tabId, companyId, email) {
       if (updatedTabId === tabId && changeInfo.status === 'complete') {
         chrome.tabs.onUpdated.removeListener(listener);
 
-        Logger.log('Company analytics page loaded, looking for first export button...');
+        PersistentLogger.log('Company analytics page loaded, looking for first export button...');
 
         // Wait a bit for the page to fully render
         setTimeout(() => {
@@ -1590,7 +1590,7 @@ async function executeCompanyPageSteps(tabId, companyId, email) {
             function: findAndClickCompanyExportButton
           }, (results) => {
             if (results && results[0] && results[0].result) {
-              Logger.log('First company export button clicked successfully');
+              PersistentLogger.log('First company export button clicked successfully');
 
               // Wait for popup/modal to appear and then handle the second export button
               setTimeout(() => {
@@ -1608,21 +1608,21 @@ async function executeCompanyPageSteps(tabId, companyId, email) {
 
     // Function to handle the export popup/modal
     const handleExportPopup = (tabId) => {
-      Logger.log('Looking for second export button in popup/modal...');
+      PersistentLogger.log('Looking for second export button in popup/modal...');
 
       chrome.scripting.executeScript({
         target: { tabId },
         function: findAndClickSecondExportButton
       }, (results) => {
         if (results && results[0] && results[0].result) {
-          Logger.log('Second company export button clicked successfully');
+          PersistentLogger.log('Second company export button clicked successfully');
           exportPopupHandled = true;
           secondExportClicked = true;
 
           // Wait longer for download to start after second click (5 seconds)
           setTimeout(() => {
             if (!downloadStarted) {
-              Logger.log('Checking for recent company analytics downloads...');
+              PersistentLogger.log('Checking for recent company analytics downloads...');
 
               // Check for any recent downloads that might be the company file
               checkForRecentDownloads(companyId, email)
@@ -1632,23 +1632,23 @@ async function executeCompanyPageSteps(tabId, companyId, email) {
                   try {
                     chrome.tabs.remove(tabId, () => {
                       if (chrome.runtime.lastError) {
-                        Logger.log(`Tab ${tabId} was already closed`);
+                        PersistentLogger.log(`Tab ${tabId} was already closed`);
                       }
                     });
                   } catch (e) {
-                    Logger.log(`Tab ${tabId} cleanup skipped - already closed`);
+                    PersistentLogger.log(`Tab ${tabId} cleanup skipped - already closed`);
                   }
                   resolve();
                 })
                 .catch(() => {
-                  Logger.log('No recent downloads found, trying alternative export methods...');
+                  PersistentLogger.log('No recent downloads found, trying alternative export methods...');
                   // Try clicking again or look for alternative buttons
                   chrome.scripting.executeScript({
                     target: { tabId },
                     function: findAndClickAlternativeExportButton
                   }, (altResults) => {
                     if (altResults && altResults[0] && altResults[0].result) {
-                      Logger.log('Alternative export button clicked');
+                      PersistentLogger.log('Alternative export button clicked');
                       // Wait another 5 seconds for this attempt
                       setTimeout(() => {
                         if (!downloadStarted) {
@@ -1666,7 +1666,7 @@ async function executeCompanyPageSteps(tabId, companyId, email) {
           }, 5000); // Wait 5 seconds after second export click
 
         } else {
-          Logger.log('Second export button not found, trying alternative approaches...');
+          PersistentLogger.log('Second export button not found, trying alternative approaches...');
 
           // Try alternative approaches for the popup
           setTimeout(() => {
@@ -1675,7 +1675,7 @@ async function executeCompanyPageSteps(tabId, companyId, email) {
               function: findAndClickAlternativeExportButton
             }, (altResults) => {
               if (altResults && altResults[0] && altResults[0].result) {
-                Logger.log('Alternative export button clicked successfully');
+                PersistentLogger.log('Alternative export button clicked successfully');
                 exportPopupHandled = true;
                 secondExportClicked = true;
 
@@ -1707,7 +1707,7 @@ async function executeCompanyPageSteps(tabId, companyId, email) {
     // Set timeout for the entire process
     setTimeout(() => {
       if (!downloadCompleted) {
-        Logger.log('Company automation timeout - checking for recent downloads...');
+        PersistentLogger.log('Company automation timeout - checking for recent downloads...');
 
         if (secondExportClicked) {
           // If we clicked the second export button, check for recent downloads
@@ -1718,11 +1718,11 @@ async function executeCompanyPageSteps(tabId, companyId, email) {
               try {
                 chrome.tabs.remove(tabId, () => {
                   if (chrome.runtime.lastError) {
-                    Logger.log(`Tab ${tabId} was already closed`);
+                    PersistentLogger.log(`Tab ${tabId} was already closed`);
                   }
                 });
               } catch (e) {
-                Logger.log(`Tab ${tabId} cleanup skipped - already closed`);
+                PersistentLogger.log(`Tab ${tabId} cleanup skipped - already closed`);
               }
               resolve();
             })
@@ -1732,11 +1732,11 @@ async function executeCompanyPageSteps(tabId, companyId, email) {
               try {
                 chrome.tabs.remove(tabId, () => {
                   if (chrome.runtime.lastError) {
-                    Logger.log(`Tab ${tabId} was already closed`);
+                    PersistentLogger.log(`Tab ${tabId} was already closed`);
                   }
                 });
               } catch (e) {
-                Logger.log(`Tab ${tabId} cleanup skipped - already closed`);
+                PersistentLogger.log(`Tab ${tabId} cleanup skipped - already closed`);
               }
               reject(new Error('Company page automation timed out - no download detected'));
             });
@@ -1746,11 +1746,11 @@ async function executeCompanyPageSteps(tabId, companyId, email) {
           try {
             chrome.tabs.remove(tabId, () => {
               if (chrome.runtime.lastError) {
-                Logger.log(`Tab ${tabId} was already closed`);
+                PersistentLogger.log(`Tab ${tabId} was already closed`);
               }
             });
           } catch (e) {
-            Logger.log(`Tab ${tabId} cleanup skipped - already closed`);
+            PersistentLogger.log(`Tab ${tabId} cleanup skipped - already closed`);
           }
           reject(new Error('Company page automation timed out'));
         }
@@ -1787,7 +1787,7 @@ async function checkForRecentDownloads(companyId, email) {
                download.filename.toLowerCase().includes('.xlsx') ||
                download.filename.toLowerCase().includes('.xls'))) {
 
-            Logger.log(`Found recent company analytics file`);
+            PersistentLogger.log(`Found recent company analytics file`);
 
             if (download.state === 'complete') {
               try {
@@ -1795,11 +1795,11 @@ async function checkForRecentDownloads(companyId, email) {
                 resolve();
                 return;
               } catch (error) {
-                Logger.error(`Failed to upload recent download: ${error.message}`);
+                PersistentLogger.error(`Failed to upload recent download: ${error.message}`);
               }
             } else if (download.state === 'in_progress') {
               // Wait for it to complete
-              Logger.log('Download in progress, waiting for completion...');
+              PersistentLogger.log('Download in progress, waiting for completion...');
               const waitForCompletion = () => {
                 chrome.downloads.search({ id: download.id }, async (results) => {
                   if (results.length > 0 && results[0].state === 'complete') {
@@ -1855,14 +1855,14 @@ function findAndClickCompanyExportButton() {
       if (text && exportTexts.some(exportText =>
         text.toLowerCase().includes(exportText.toLowerCase())
       )) {
-        Logger.log(`Found company export button with text: ${text}`);
+        PersistentLogger.log(`Found company export button with text: ${text}`);
         element.click();
         return true;
       }
     }
   }
 
-  Logger.log('Company export button not found');
+  PersistentLogger.log('Company export button not found');
   return false;
 }
 
@@ -1870,7 +1870,7 @@ function findAndClickCompanyExportButton() {
  * Function to be injected to find and click the second export button in popup/modal
  */
 function findAndClickSecondExportButton() {
-  Logger.log('Looking for second export button in popup/modal...');
+  PersistentLogger.log('Looking for second export button in popup/modal...');
 
   // Multi-language export button texts
   const exportTexts = [
@@ -1896,7 +1896,7 @@ function findAndClickSecondExportButton() {
     const modals = document.querySelectorAll(modalSelector);
     for (const modal of modals) {
       if (modal.offsetParent !== null) { // Check if modal is visible
-        Logger.log(`Found visible modal: ${modalSelector}`);
+        PersistentLogger.log(`Found visible modal: ${modalSelector}`);
 
         const buttons = modal.querySelectorAll('button, [role="button"], .artdeco-button, a');
         for (const button of buttons) {
@@ -1904,7 +1904,7 @@ function findAndClickSecondExportButton() {
           if (text && exportTexts.some(exportText =>
             text.toLowerCase().includes(exportText.toLowerCase())
           )) {
-            Logger.log(`Found second export button in modal with text: ${text}`);
+            PersistentLogger.log(`Found second export button in modal with text: ${text}`);
             button.click();
             return true;
           }
@@ -1924,7 +1924,7 @@ function findAndClickSecondExportButton() {
         // Make sure this is not the same button we clicked before
         const rect = button.getBoundingClientRect();
         if (rect.width > 0 && rect.height > 0) {
-          Logger.log(`Found visible second export button with text: ${text}`);
+          PersistentLogger.log(`Found visible second export button with text: ${text}`);
           button.click();
           return true;
         }
@@ -1932,7 +1932,7 @@ function findAndClickSecondExportButton() {
     }
   }
 
-  Logger.log('Second export button not found in popup/modal');
+  PersistentLogger.log('Second export button not found in popup/modal');
   return false;
 }
 
@@ -1940,7 +1940,7 @@ function findAndClickSecondExportButton() {
  * Function to be injected to find alternative export buttons or download options
  */
 function findAndClickAlternativeExportButton() {
-  Logger.log('Looking for alternative export/download buttons...');
+  PersistentLogger.log('Looking for alternative export/download buttons...');
 
   // Alternative texts that might appear
   const alternativeTexts = [
@@ -1971,7 +1971,7 @@ function findAndClickAlternativeExportButton() {
       if (alternativeTexts.some(altText =>
         textToCheck.includes(altText.toLowerCase())
       )) {
-        Logger.log(`Found alternative export button with text: ${text || ariaLabel || title}`);
+        PersistentLogger.log(`Found alternative export button with text: ${text || ariaLabel || title}`);
         element.click();
         return true;
       }
@@ -1982,13 +1982,13 @@ function findAndClickAlternativeExportButton() {
   const downloadLinks = document.querySelectorAll('a[download], a[href*="download"], a[href*="export"]');
   for (const link of downloadLinks) {
     if (link.offsetParent !== null) {
-      Logger.log(`Found download link: ${link.href}`);
+      PersistentLogger.log(`Found download link: ${link.href}`);
       link.click();
       return true;
     }
   }
 
-  Logger.log('No alternative export buttons found');
+  PersistentLogger.log('No alternative export buttons found');
   return false;
 }
 
@@ -2012,7 +2012,7 @@ async function uploadCompanyFile(filename, companyId, email) {
       }
 
       const download = downloads[0];
-      Logger.log(`Found company analytics file: ${download.filename}`);
+      PersistentLogger.log(`Found company analytics file: ${download.filename}`);
 
       try {
         // Get the download URL - LinkedIn provides direct download URLs
@@ -2023,7 +2023,7 @@ async function uploadCompanyFile(filename, companyId, email) {
           return;
         }
 
-        Logger.log(`Fetching company file from URL: ${downloadUrl}`);
+        PersistentLogger.log(`Fetching company file from URL: ${downloadUrl}`);
 
         // Fetch the file content
         const response = await fetch(downloadUrl);
@@ -2062,18 +2062,18 @@ async function uploadCompanyFile(filename, companyId, email) {
             let justFilename = download.filename;
 
             // Debug: Log the original filename
-            Logger.log(`[DEBUG] Original filename: "${download.filename}"`);
+            PersistentLogger.log(`[DEBUG] Original filename: "${download.filename}"`);
 
             // Handle Windows paths (C:\Users\...)
             if (justFilename.includes('\\')) {
               justFilename = justFilename.split('\\').pop();
-              Logger.log(`[DEBUG] After Windows split: "${justFilename}"`);
+              PersistentLogger.log(`[DEBUG] After Windows split: "${justFilename}"`);
             }
 
             // Handle Unix paths (/home/user/...)
             if (justFilename.includes('/')) {
               justFilename = justFilename.split('/').pop();
-              Logger.log(`[DEBUG] After Unix split: "${justFilename}"`);
+              PersistentLogger.log(`[DEBUG] After Unix split: "${justFilename}"`);
             }
 
             // Fallback if extraction failed
@@ -2081,10 +2081,10 @@ async function uploadCompanyFile(filename, companyId, email) {
               // Try to extract from the end of the path using regex
               const match = download.filename.match(/[^\\\/]+$/);
               justFilename = match ? match[0] : 'company_analytics.xls';
-              Logger.log(`[DEBUG] After regex fallback: "${justFilename}"`);
+              PersistentLogger.log(`[DEBUG] After regex fallback: "${justFilename}"`);
             }
 
-            Logger.log(`[DEBUG] Final filename: "${justFilename}"`);
+            PersistentLogger.log(`[DEBUG] Final filename: "${justFilename}"`);
 
             // Prepare the payload for the company API
             const payload = {
@@ -2094,7 +2094,7 @@ async function uploadCompanyFile(filename, companyId, email) {
               file_name: justFilename
             };
 
-            Logger.log(`Uploading company analytics file for company ${companyId}`);
+            PersistentLogger.log(`Uploading company analytics file for company ${companyId}`);
 
             // Upload to company API endpoint
             const uploadResponse = await fetch('https://sn6ujdpryv35cap42dqlgmyybe0wsxso.lambda-url.us-east-1.on.aws/', {
@@ -2107,11 +2107,11 @@ async function uploadCompanyFile(filename, companyId, email) {
 
             if (uploadResponse.ok) {
               const responseData = await uploadResponse.json();
-              Logger.log('Company analytics file uploaded successfully');
+              PersistentLogger.log('Company analytics file uploaded successfully');
               resolve(responseData);
             } else {
               const errorText = await uploadResponse.text();
-              Logger.error(`Company file upload failed: ${uploadResponse.status} - ${errorText}`);
+              PersistentLogger.error(`Company file upload failed: ${uploadResponse.status} - ${errorText}`);
               reject(new Error(`Company file upload failed: ${uploadResponse.status} - ${errorText}`));
             }
           } catch (error) {
@@ -2155,7 +2155,7 @@ async function updateCompanyExecutionStatus(status, error = null) {
   }
 
   chrome.storage.local.set(updateData);
-  Logger.log(`Company execution status updated: ${status}`);
+  PersistentLogger.log(`Company execution status updated: ${status}`);
 }
 
 // ============================================================================
@@ -2177,7 +2177,7 @@ const AlarmManager = {
    */
   setupInitialAlarm: async function() {
     if (this._initialAlarmSetup) {
-      Logger.log("Initial alarm already set up, skipping duplicate setup");
+      PersistentLogger.log("Initial alarm already set up, skipping duplicate setup");
       return;
     }
     this._initialAlarmSetup = true;
@@ -2193,7 +2193,7 @@ const AlarmManager = {
 
         // Check if stored execution time is in the past
         if (now >= nextExecution) {
-          Logger.log("Stored execution time is in the past. Running task now.");
+          PersistentLogger.log("Stored execution time is in the past. Running task now.");
           runAutomationScript();
           nextExecution = new Date(now.getTime() + EXECUTION_INTERVAL);
         }
@@ -2213,7 +2213,7 @@ const AlarmManager = {
         alarmsEnabled: true
       });
 
-      Logger.log(`Alarm set. Next execution: ${nextExecution}`);
+      PersistentLogger.log(`Alarm set. Next execution: ${nextExecution}`);
     });
   },
 
@@ -2223,15 +2223,15 @@ const AlarmManager = {
   setupWatchdogAlarm() {
     // Run the watchdog more frequently (every 1 minute) to catch missed retries
     chrome.alarms.create(CONFIG.ALARMS.WATCHDOG, { periodInMinutes: 1 });
-    Logger.log("Watchdog alarm set to run every minute");
+    PersistentLogger.log("Watchdog alarm set to run every minute");
 
     // Mark alarms as enabled
     chrome.storage.local.set({ alarmsEnabled: true });
-    Logger.log("Alarms marked as enabled in storage");
+    PersistentLogger.log("Alarms marked as enabled in storage");
 
     // Debug current alarms
     //chrome.alarms.getAll((alarms) => {
-    //  Logger.log(`Initial alarms: ${JSON.stringify(alarms.map(a => ({
+    //  PersistentLogger.log(`Initial alarms: ${JSON.stringify(alarms.map(a => ({
   //    name: a.name,
     //    scheduledTime: new Date(a.scheduledTime).toISOString(),
     //    periodInMinutes: a.periodInMinutes
@@ -2244,7 +2244,7 @@ const AlarmManager = {
    */
   initializeAlarmListeners() {
     chrome.alarms.onAlarm.addListener((alarm) => {
-      Logger.log(`Alarm triggered: ${alarm.name} at ${new Date().toISOString()}`);
+      PersistentLogger.log(`Alarm triggered: ${alarm.name} at ${new Date().toISOString()}`);
 
       switch(alarm.name) {
         case CONFIG.ALARMS.MAIN:
@@ -2269,7 +2269,7 @@ const AlarmManager = {
       nextExecution: nextExecution.toISOString()
     });
 
-    Logger.log(`Main alarm triggered. Next execution: ${nextExecution}`);
+    PersistentLogger.log(`Main alarm triggered. Next execution: ${nextExecution}`);
     runAutomationScript();
   },
 
@@ -2286,17 +2286,17 @@ const AlarmManager = {
       if (data.retryScheduled && data.nextRetryTime) {
         const nextRetryTime = new Date(data.nextRetryTime);
         if (now >= nextRetryTime) {
-          Logger.log(`=== WATCHDOG DETECTED MISSED RETRY at ${timestamp} ===`);
-          Logger.log("Watchdog detected missed retry execution. Running retry now.");
+          PersistentLogger.log(`=== WATCHDOG DETECTED MISSED RETRY at ${timestamp} ===`);
+          PersistentLogger.log("Watchdog detected missed retry execution. Running retry now.");
 
           // Clear the retry scheduled flag
           chrome.storage.local.set({ retryScheduled: false });
 
           // Log the retry count
-          Logger.log(`Current retry count: ${data.retryCount || 0}`);
-          Logger.log(`Next retry time was: ${data.nextRetryTime}`);
-          Logger.log(`Current time is: ${timestamp}`);
-          Logger.log(`Time difference: ${now - nextRetryTime}ms`);
+          PersistentLogger.log(`Current retry count: ${data.retryCount || 0}`);
+          PersistentLogger.log(`Next retry time was: ${data.nextRetryTime}`);
+          PersistentLogger.log(`Current time is: ${timestamp}`);
+          PersistentLogger.log(`Time difference: ${now - nextRetryTime}ms`);
 
           // Run the automation script
           runAutomationScript();
@@ -2308,7 +2308,7 @@ const AlarmManager = {
       if (data.nextExecution) {
         const nextExecution = new Date(data.nextExecution);
         if (now >= nextExecution) {
-          Logger.log("Watchdog detected missed execution. Running task now.");
+          PersistentLogger.log("Watchdog detected missed execution. Running task now.");
           runAutomationScript();
 
           // Reschedule next execution
@@ -2329,33 +2329,33 @@ const AlarmManager = {
    */
   handleRetryAlarm() {
     const timestamp = new Date().toISOString();
-    Logger.log(`=== RETRY ALARM TRIGGERED at ${timestamp} ===`);
-    Logger.log(`Retry alarm handler started. Time: ${timestamp}`);
+    PersistentLogger.log(`=== RETRY ALARM TRIGGERED at ${timestamp} ===`);
+    PersistentLogger.log(`Retry alarm handler started. Time: ${timestamp}`);
 
     // Debug information about retry state
     chrome.storage.local.get(['retryCount', 'nextRetryTime', 'retryScheduled'], (data) => {
-      Logger.log(`Current retry count before execution: ${data.retryCount || 0}`);
-      Logger.log(`Retry scheduled: ${data.retryScheduled ? 'Yes' : 'No'}`);
-      Logger.log(`Next retry time: ${data.nextRetryTime || 'Not set'}`);
+      PersistentLogger.log(`Current retry count before execution: ${data.retryCount || 0}`);
+      PersistentLogger.log(`Retry scheduled: ${data.retryScheduled ? 'Yes' : 'No'}`);
+      PersistentLogger.log(`Next retry time: ${data.nextRetryTime || 'Not set'}`);
 
       // Only proceed if retry is still scheduled (prevents race conditions)
       if (data.retryScheduled) {
         // Clear the retry scheduled flag immediately to prevent duplicate executions
         chrome.storage.local.set({ retryScheduled: false }, () => {
-          Logger.log('Retry scheduled flag cleared, proceeding with execution');
+          PersistentLogger.log('Retry scheduled flag cleared, proceeding with execution');
 
           // Run the automation script with error handling
           try {
-            Logger.log('Starting automation script from retry handler');
+            PersistentLogger.log('Starting automation script from retry handler');
             runAutomationScript().catch(error => {
-              Logger.error(`Retry execution failed: ${error.message}`);
+              PersistentLogger.error(`Retry execution failed: ${error.message}`);
             });
           } catch (error) {
-            Logger.error(`Error in retry handler: ${error.message}`);
+            PersistentLogger.error(`Error in retry handler: ${error.message}`);
           }
         });
       } else {
-        Logger.log('Retry not scheduled or already handled, skipping execution');
+        PersistentLogger.log('Retry not scheduled or already handled, skipping execution');
       }
     });
   }
@@ -2377,17 +2377,17 @@ function setupRuntimeListeners() {
         nextExecution: nextExecution.toISOString()
       });
 
-      Logger.log(`Manual execution triggered. Next execution: ${nextExecution}`);
+      PersistentLogger.log(`Manual execution triggered. Next execution: ${nextExecution}`);
       runAutomationScript();
     }
     else if (message.action === 'executeCompanyScript') {
       // Check if company automation is already running
       if (companyAutomationRunning) {
-        Logger.log('Company automation already running, ignoring manual request');
+        PersistentLogger.log('Company automation already running, ignoring manual request');
         return;
       }
 
-      Logger.log(`Manual company execution triggered for company ID: ${message.companyId}`);
+      PersistentLogger.log(`Manual company execution triggered for company ID: ${message.companyId}`);
       runCompanyPageAutomation(message.companyId);
     }
     else if (message.action === 'updateInterval') {
@@ -2406,7 +2406,7 @@ function setupRuntimeListeners() {
             nextExecution: nextExecution.toISOString()
           });
 
-          Logger.log(`Execution interval updated to ${EXECUTION_INTERVAL / (24 * 60 * 60 * 1000)} days. Next execution: ${nextExecution}`);
+          PersistentLogger.log(`Execution interval updated to ${EXECUTION_INTERVAL / (24 * 60 * 60 * 1000)} days. Next execution: ${nextExecution}`);
         }
       });
     }
@@ -2414,26 +2414,26 @@ function setupRuntimeListeners() {
 
   // Handle browser startup and extension installation
   chrome.runtime.onInstalled.addListener((details) => {
-    Logger.log(`Extension installed/updated. Reason: ${details.reason}`);
+    PersistentLogger.log(`Extension installed/updated. Reason: ${details.reason}`);
     
     // Only run full initialization on install, not on updates
     if (details.reason === 'install') {
-      Logger.log("First-time installation detected, running safe initialization");
+      PersistentLogger.log("First-time installation detected, running safe initialization");
       safeInitializeExtension();
     } else {
-      Logger.log("Extension update detected, skipping duplicate initialization");
+      PersistentLogger.log("Extension update detected, skipping duplicate initialization");
       // Just ensure alarms are enabled
       chrome.storage.local.set({ alarmsEnabled: true }, () => {
-        Logger.log("alarmsEnabled flag set to true after update");
+        PersistentLogger.log("alarmsEnabled flag set to true after update");
       });
     }
   });
 
   chrome.runtime.onStartup.addListener(() => {
-    Logger.log("Browser startup detected");
+    PersistentLogger.log("Browser startup detected");
     // Only set the flag, don't re-initialize everything
     chrome.storage.local.set({ alarmsEnabled: true }, () => {
-      Logger.log("alarmsEnabled flag set to true on browser startup");
+      PersistentLogger.log("alarmsEnabled flag set to true on browser startup");
     });
     
     // Ensure alarms are still active (they might have been cleared)
@@ -2468,7 +2468,7 @@ async function initializeExtension() {
 
   // Explicitly set alarmsEnabled flag
   chrome.storage.local.set({ alarmsEnabled: true });
-  Logger.log("Extension initialized with alarms enabled");
+  PersistentLogger.log("Extension initialized with alarms enabled");
 }
 
 // Global flag to prevent multiple initializations
@@ -2479,12 +2479,12 @@ let extensionInitialized = false;
  */
 async function safeInitializeExtension() {
   if (extensionInitialized) {
-    Logger.log("Extension already initialized, skipping duplicate initialization");
+    PersistentLogger.log("Extension already initialized, skipping duplicate initialization");
     return;
   }
   
   extensionInitialized = true;
-  Logger.log("Starting extension initialization...");
+  PersistentLogger.log("Starting extension initialization...");
   await initializeExtension();
 }
 
@@ -2509,9 +2509,9 @@ function debugLog(message, data = null) {
   if (!TYPING_DEBUG_MODE) return;
 
   const timestamp = new Date().toISOString();
-  Logger.log(`[PPA-DEBUG ${timestamp}] ${message}`);
+  PersistentLogger.log(`[PPA-DEBUG ${timestamp}] ${message}`);
   if (data) {
-    Logger.log('[PPA-DEBUG DATA]', data);
+    PersistentLogger.log('[PPA-DEBUG DATA]', data);
   }
 }
 
@@ -2591,7 +2591,7 @@ function createLinkedInPost(text, delay, autoSubmit) {
   try {
     // Check if the helper is available
     if (!window.linkedInPostHelper) {
-      Logger.error("LinkedIn post helper not found");
+      PersistentLogger.error("LinkedIn post helper not found");
       return { success: false, message: "LinkedIn post helper not found" };
     }
 
@@ -2661,7 +2661,7 @@ function createLinkedInPost(text, delay, autoSubmit) {
         return { success: false, message: error.message };
       });
   } catch (error) {
-    Logger.error("Error in createLinkedInPost:", error);
+    PersistentLogger.error("Error in createLinkedInPost:", error);
     return { success: false, message: error.message };
   }
 }
@@ -3129,7 +3129,7 @@ const AdvancedPostAnalytics = {
           for (const selector of exportSelectors) {
             exportButton = document.querySelector(selector);
             if (exportButton) {
-              Logger.log(`Found export button with selector: ${selector}`);
+              PersistentLogger.log(`Found export button with selector: ${selector}`);
               break;
             }
           }
@@ -3145,7 +3145,7 @@ const AdvancedPostAnalytics = {
             });
 
             if (exportButton) {
-              Logger.log(`Found export button by text search: ${exportButton.textContent || exportButton.getAttribute('aria-label')}`);
+              PersistentLogger.log(`Found export button by text search: ${exportButton.textContent || exportButton.getAttribute('aria-label')}`);
             }
           }
 
