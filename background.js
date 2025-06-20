@@ -2501,12 +2501,12 @@ safeInitializeExtension();
 // DEBUGGING UTILITIES
 // ============================================================================
 
-// Enable or disable verbose debugging
-const DEBUG_MODE = true;
+// Enable or disable verbose debugging for typing simulation
+const TYPING_DEBUG_MODE = false;
 
-// Debug logging function
+// Debug logging function for typing simulation
 function debugLog(message, data = null) {
-  if (!DEBUG_MODE) return;
+  if (!TYPING_DEBUG_MODE) return;
 
   const timestamp = new Date().toISOString();
   Logger.log(`[PPA-DEBUG ${timestamp}] ${message}`);

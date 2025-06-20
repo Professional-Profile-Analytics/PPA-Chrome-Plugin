@@ -7,12 +7,12 @@
  * 3. Type text into the editor character by character with variable timing
  */
 
-// Debug configuration - set to false for production
-const DEBUG_MODE = false;
+// Debug configuration for typing helper - set to false for production
+const TYPING_HELPER_DEBUG_MODE = false;
 
-// Debug logging function
+// Debug logging function for typing helper
 function debugLog(message, data = null) {
-  if (DEBUG_MODE) {
+  if (TYPING_HELPER_DEBUG_MODE) {
     const timestamp = new Date().toISOString();
     console.log(`[PPA-DEBUG ${timestamp}] ${message}`);
     if (data) {

@@ -5,20 +5,20 @@
  * for downloading analytics data.
  */
 
-// Debug configuration - set to false for production
-const DEBUG_MODE = false;
+// Debug configuration for content script - set to false for production
+const CONTENT_DEBUG_MODE = false;
 
 // Enhanced Logger with conditional logging for content script
-const Logger = {
+const ContentLogger = {
   log: (message) => {
-    if (DEBUG_MODE) console.log(`[PPA Content] ${message}`);
+    if (CONTENT_DEBUG_MODE) console.log(`[PPA Content] ${message}`);
   },
   error: (message) => {
     // Always log errors, even in production
     console.error(`[PPA Content Error] ${message}`);
   },
   warn: (message) => {
-    if (DEBUG_MODE) console.warn(`[PPA Content Warning] ${message}`);
+    if (CONTENT_DEBUG_MODE) console.warn(`[PPA Content Warning] ${message}`);
   }
 };
 
@@ -27,14 +27,14 @@ const Logger = {
  * @returns {boolean} True if button was found and clicked, false otherwise
  */
 function findAndClickExportButton() {
-  Logger.log("Searching for Export button");
+  ContentLogger.log("Searching for Export button");
   
   const button = Array.from(document.querySelectorAll(".artdeco-button")).find(
     btn => btn.textContent.trim() === "Export"
   );
   
   if (button) {
-    Logger.log("Export button found, simulating click");
+    ContentLogger.log("Export button found, simulating click");
     const event = new MouseEvent("click", {
       bubbles: true,
       cancelable: true,
@@ -43,7 +43,7 @@ function findAndClickExportButton() {
     button.dispatchEvent(event);
     return true;
   } else {
-    Logger.warn("Export button not found");
+    ContentLogger.warn("Export button not found");
     return false;
   }
 }
@@ -52,7 +52,7 @@ function findAndClickExportButton() {
  * Sets up a mutation observer to watch for the Export button to appear in the DOM
  */
 function setupButtonObserver() {
-  Logger.log("Setting up mutation observer to watch for Export button");
+  ContentLogger.log("Setting up mutation observer to watch for Export button");
   
   const observer = new MutationObserver(() => {
     if (findAndClickExportButton()) {
@@ -65,7 +65,7 @@ function setupButtonObserver() {
   // Safety timeout to disconnect observer after 2 minutes if button never appears
   setTimeout(() => {
     if (observer) {
-      Logger.warn("Observer timeout reached (2 minutes), disconnecting");
+      ContentLogger.warn("Observer timeout reached (2 minutes), disconnecting");
       observer.disconnect();
     }
   }, 120000);
@@ -78,14 +78,14 @@ function setupMessageListeners() {
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // Handle download data request
     if (message.action === "downloadData") {
-      Logger.log("Received downloadData request");
+      ContentLogger.log("Received downloadData request");
       const success = findAndClickExportButton();
       sendResponse({ success });
     }
     
     // Handle upload data request
     else if (message.action === "uploadData") {
-      Logger.log(`Received uploadData request with email: ${message.email}`);
+      ContentLogger.log(`Received uploadData request with email: ${message.email}`);
       
       try {
         const fileInput = document.querySelector('input[type="file"]');
@@ -112,7 +112,7 @@ function setupMessageListeners() {
           throw new Error("Required form elements not found");
         }
       } catch (error) {
-        Logger.error(`Upload failed: ${error.message}`);
+        ContentLogger.error(`Upload failed: ${error.message}`);
         sendResponse({ success: false, error: error.message });
       }
     }
@@ -126,7 +126,7 @@ function setupMessageListeners() {
  * Initialize the content script
  */
 function initialize() {
-  Logger.log("Content script initialized");
+  ContentLogger.log("Content script initialized");
   
   // Try to find and click the button immediately
   if (!findAndClickExportButton()) {

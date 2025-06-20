@@ -3,17 +3,17 @@
  * Handles reading Excel files and extracting post URLs for detailed analytics
  */
 
-// Debug configuration - set to false for production
-const DEBUG_MODE = false;
+// Debug configuration for Excel processor - set to false for production
+const EXCEL_DEBUG_MODE = false;
 
-// Enhanced Logger with conditional logging
-const Logger = {
+// Enhanced Logger with conditional logging for Excel processor
+const ExcelLogger = {
   log: (message) => {
-    if (DEBUG_MODE) Logger.log(`[Excel Processor] ${message}`);
+    if (EXCEL_DEBUG_MODE) console.log(`[Excel Processor] ${message}`);
   },
   error: (message) => {
     // Always log errors, even in production
-    Logger.error(`[Excel Processor Error] ${message}`);
+    console.error(`[Excel Processor Error] ${message}`);
   }
 };
 
@@ -55,11 +55,11 @@ class ExcelProcessor {
             }
           }
           
-          Logger.log(`Extracted ${urls.length} LinkedIn post URLs from Excel file`);
+          ExcelLogger.log(`Extracted ${urls.length} LinkedIn post URLs from Excel file`);
           resolve(urls);
           
         } catch (error) {
-          Logger.error('Error processing Excel file:', error);
+          ExcelLogger.error('Error processing Excel file:', error);
           reject(new Error(`Failed to process Excel file: ${error.message}`));
         }
       };
@@ -106,12 +106,12 @@ class ExcelProcessor {
       
       // Transform to analytics URL format
       const analyticsUrl = `https://www.linkedin.com/analytics/post-summary/urn:li:activity:${activityUrn}/`;
-      Logger.log(`Transformed URL: ${postUrl} -> ${analyticsUrl}`);
+      ExcelLogger.log(`Transformed URL: ${postUrl} -> ${analyticsUrl}`);
       
       return analyticsUrl;
       
     } catch (error) {
-      Logger.error(`Error transforming URL ${postUrl}:`, error);
+      ExcelLogger.error(`Error transforming URL ${postUrl}:`, error);
       throw error;
     }
   }

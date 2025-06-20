@@ -3,13 +3,13 @@
  * This script runs in the context of web pages and can access file inputs
  */
 
-// Debug configuration - set to false for production
-const DEBUG_MODE = false;
+// Debug configuration for file reader - set to false for production
+const FILE_READER_DEBUG_MODE = false;
 
-// Enhanced Logger with conditional logging
-const Logger = {
+// Enhanced Logger with conditional logging for file reader
+const FileReaderLogger = {
   log: (message) => {
-    if (DEBUG_MODE) Logger.log(`[File Reader] ${message}`);
+    if (FILE_READER_DEBUG_MODE) console.log(`[File Reader] ${message}`);
   },
   error: (message) => {
     // Always log errors, even in production
@@ -104,7 +104,7 @@ function extractUrlsFromWorkbook(workbook) {
       }
     }
     
-    Logger.log(`Extracted ${urls.length} LinkedIn post URLs from Excel file`);
+    FileReaderLogger.log(`Extracted ${urls.length} LinkedIn post URLs from Excel file`);
     return urls;
     
   } catch (error) {
