@@ -1,0 +1,55 @@
+name: Run Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [16.x, 18.x, 20.x]
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        cache-dependency-path: tests/package-lock.json
+        
+    - name: Install test dependencies
+      run: |
+        cd tests
+        npm ci
+        
+    - name: Run ConfigManager tests
+      run: |
+        cd tests
+        npm run test:config
+        
+    - name: Run Advanced Post Analytics tests
+      run: |
+        cd tests
+        npm run test:analytics
+        
+    - name: Run all tests with coverage
+      run: |
+        cd tests
+        npm run test:coverage
+        
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v3
+      with:
+        file: tests/coverage/lcov.info
+        directory: tests/coverage/
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false

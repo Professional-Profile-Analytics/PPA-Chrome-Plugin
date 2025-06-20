@@ -1,0 +1,75 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: tests/package-lock.json
+        
+    - name: Install dependencies
+      working-directory: tests
+      run: npm ci
+        
+    - name: Run all tests
+      working-directory: tests
+      run: npm test
+        
+    - name: Generate coverage report
+      working-directory: tests
+      run: npm run test:coverage
+      
+    - name: Test summary
+      working-directory: tests
+      run: |
+        echo "## Test Results 🧪" >> $GITHUB_STEP_SUMMARY
+        echo "✅ All tests completed successfully" >> $GITHUB_STEP_SUMMARY
+        echo "📊 Coverage report generated" >> $GITHUB_STEP_SUMMARY
+        echo "🎯 Chrome Extension tests validated" >> $GITHUB_STEP_SUMMARY
+
+  lint:
+    name: Code Quality Check
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        
+    - name: Check file structure
+      run: |
+        echo "## File Structure Check 📁" >> $GITHUB_STEP_SUMMARY
+        echo "✅ Main files:" >> $GITHUB_STEP_SUMMARY
+        ls -la *.js *.json *.html | head -10 >> $GITHUB_STEP_SUMMARY
+        echo "✅ Test files:" >> $GITHUB_STEP_SUMMARY
+        ls -la tests/*.js tests/*.json | head -10 >> $GITHUB_STEP_SUMMARY
+        
+    - name: Validate manifest
+      run: |
+        if [ -f "manifest.json" ]; then
+          echo "✅ manifest.json found"
+          node -e "JSON.parse(require('fs').readFileSync('manifest.json', 'utf8'))"
+          echo "✅ manifest.json is valid JSON"
+        else
+          echo "❌ manifest.json not found"
+          exit 1
+        fi
