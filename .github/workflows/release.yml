@@ -101,15 +101,35 @@ jobs:
         
     - name: Create ZIP package
       run: |
-        cd chrome-extension-package
-        
         # Create ZIP with shorter, cleaner filename
         VERSION="${{ steps.get_version.outputs.VERSION }}"
         # Remove 'v' prefix if present for cleaner version number
         CLEAN_VERSION=${VERSION#v}
         ZIP_NAME="ppa-chrome-extension-${CLEAN_VERSION}.zip"
         
-        # Create ZIP with specific compression to avoid false positives
+        # Create README.txt in the package directory first
+        cd chrome-extension-package
+        echo "PPA Chrome Extension Package" > README.txt
+        echo "============================" >> README.txt
+        echo "" >> README.txt
+        echo "This is a legitimate Chrome Extension package for Professional Profile Analytics." >> README.txt
+        echo "" >> README.txt
+        echo "Package Contents:" >> README.txt
+        echo "- manifest.json: Chrome Extension manifest file" >> README.txt
+        echo "- background.js: Extension service worker" >> README.txt
+        echo "- popup.html/css/js: Extension popup interface" >> README.txt
+        echo "- options.html/css/js: Extension options page" >> README.txt
+        echo "- icons/: Extension icons" >> README.txt
+        echo "" >> README.txt
+        echo "Installation:" >> README.txt
+        echo "1. Extract this ZIP file" >> README.txt
+        echo "2. Open Chrome -> Extensions (chrome://extensions/)" >> README.txt
+        echo "3. Enable Developer Mode" >> README.txt
+        echo "4. Click \"Load unpacked\" and select the extracted folder" >> README.txt
+        echo "" >> README.txt
+        echo "This package is automatically built by GitHub Actions." >> README.txt
+        
+        # Create ZIP with all files at root level (not in a subfolder)
         zip -r "../$ZIP_NAME" . -x "*.DS_Store" "Thumbs.db" -9
         
         cd ..
@@ -122,34 +142,6 @@ jobs:
           # Show ZIP contents for verification
           echo "📋 ZIP contents:"
           unzip -l "$ZIP_NAME"
-          
-          # Add virus scanning mitigation
-          echo "🛡️ Adding virus scanning mitigation..."
-          
-          # Create a README.txt file to help with virus scanner context
-          echo "PPA Chrome Extension Package" > README.txt
-          echo "============================" >> README.txt
-          echo "" >> README.txt
-          echo "This is a legitimate Chrome Extension package for Professional Profile Analytics." >> README.txt
-          echo "" >> README.txt
-          echo "Package Contents:" >> README.txt
-          echo "- manifest.json: Chrome Extension manifest file" >> README.txt
-          echo "- background.js: Extension service worker" >> README.txt
-          echo "- popup.html/css/js: Extension popup interface" >> README.txt
-          echo "- options.html/css/js: Extension options page" >> README.txt
-          echo "- icons/: Extension icons" >> README.txt
-          echo "" >> README.txt
-          echo "Installation:" >> README.txt
-          echo "1. Extract this ZIP file" >> README.txt
-          echo "2. Open Chrome -> Extensions (chrome://extensions/)" >> README.txt
-          echo "3. Enable Developer Mode" >> README.txt
-          echo "4. Click \"Load unpacked\" and select the extracted folder" >> README.txt
-          echo "" >> README.txt
-          echo "This package is automatically built by GitHub Actions." >> README.txt
-          
-          # Re-create ZIP with README for better virus scanner recognition
-          zip -u "$ZIP_NAME" README.txt
-          
         else
           echo "❌ Failed to create ZIP package"
           exit 1
