@@ -2690,6 +2690,7 @@ const AdvancedPostAnalytics = {
     const limitedPostUrls = postUrls.slice(0, postsToProcess);
     
     logger.log(`Posts available: ${totalAvailable}, Posts limit: ${postsLimit}, Processing: ${postsToProcess} posts`);
+    PersistentLogger.log(`🚀 Starting individual post analytics processing: ${postsToProcess} posts (${totalAvailable} available, limit: ${postsLimit})`);
 
     const results = {
       processed: 0,
@@ -2705,11 +2706,15 @@ const AdvancedPostAnalytics = {
       // Process each post URL (limited by user setting)
       for (let i = 0; i < limitedPostUrls.length; i++) {
         const postUrl = limitedPostUrls[i];
+        
+        // Enhanced logging for each URL processing
         logger.log(`Processing post ${i + 1}/${limitedPostUrls.length}: ${postUrl}`);
+        PersistentLogger.log(`🔄 Processing individual post analytics ${i + 1}/${limitedPostUrls.length}: ${postUrl}`);
 
         try {
           // Transform URL to analytics format
           const analyticsUrl = this.transformToAnalyticsUrl(postUrl);
+          PersistentLogger.log(`📊 Transformed to analytics URL: ${analyticsUrl}`);
 
           // Navigate to the post analytics page
           await this.navigateToPostAnalytics(tabId, analyticsUrl, logger);
@@ -2739,8 +2744,10 @@ const AdvancedPostAnalytics = {
               });
               results.successful++;
               logger.log(`✅ Post ${i + 1}/${limitedPostUrls.length} uploaded successfully`);
+              PersistentLogger.log(`✅ Successfully processed post ${i + 1}/${limitedPostUrls.length}: ${postUrl}`);
             } else {
               logger.error(`❌ Upload failed for post ${postUrl}: ${uploadResult.error}`);
+              PersistentLogger.log(`❌ Upload failed for post ${i + 1}/${limitedPostUrls.length}: ${postUrl} - ${uploadResult.error}`);
               results.errors.push({
                 postUrl: postUrl,
                 error: `Upload failed: ${uploadResult.error}`
@@ -2749,6 +2756,7 @@ const AdvancedPostAnalytics = {
             }
           } else {
             logger.error(`❌ Download failed for post: ${postUrl}`);
+            PersistentLogger.log(`❌ Download failed for post ${i + 1}/${limitedPostUrls.length}: ${postUrl}`);
             results.errors.push({
               postUrl: postUrl,
               error: 'Download failed - no file detected'
@@ -2762,11 +2770,13 @@ const AdvancedPostAnalytics = {
           if (i < limitedPostUrls.length - 1) {
             const delayTime = 8000 + Math.random() * 7000; // 8-15 second delay
             logger.log(`Waiting ${Math.round(delayTime/1000)} seconds before next post to avoid download blocking...`);
+            PersistentLogger.log(`⏳ Waiting ${Math.round(delayTime/1000)} seconds before processing next post (${i + 2}/${limitedPostUrls.length})`);
             await this.delay(delayTime);
           }
 
         } catch (error) {
           logger.error(`❌ Failed to process post ${postUrl}: ${error.message}`);
+          PersistentLogger.log(`❌ Failed to process post ${i + 1}/${limitedPostUrls.length}: ${postUrl} - ${error.message}`);
           
           // Check if this is a critical validation error
           if (error.message.includes('STRICT VALIDATION FAILED') || 
@@ -2801,6 +2811,15 @@ const AdvancedPostAnalytics = {
       }
 
       logger.log(`Advanced post statistics processing completed. Processed: ${results.processed}, Successful: ${results.successful}, Failed: ${results.failed}`);
+      PersistentLogger.log(`🏁 Individual post analytics processing completed: ${results.successful}/${results.processed} successful (${results.failed} failed)`);
+      
+      if (results.successful > 0) {
+        PersistentLogger.log(`✅ Successfully uploaded ${results.successful} individual post analytics files`);
+      }
+      if (results.failed > 0) {
+        PersistentLogger.log(`⚠️ Failed to process ${results.failed} posts - check individual error messages above`);
+      }
+      
       return results;
 
     } catch (error) {
