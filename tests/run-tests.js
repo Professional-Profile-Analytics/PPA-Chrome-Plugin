@@ -51,6 +51,11 @@ try {
       execSync('npx jest downloadTracking.test.js --verbose', { stdio: 'inherit' });
       break;
       
+    case 'language':
+      console.log('Running Language Detection tests only...\n');
+      execSync('npx jest languageDetection.test.js --verbose', { stdio: 'inherit' });
+      break;
+      
     case 'install':
       console.log('Installing test dependencies...\n');
       execSync('npm install', { stdio: 'inherit' });
@@ -62,6 +67,7 @@ try {
       console.log('  node run-tests.js config      - Run ConfigManager tests');
       console.log('  node run-tests.js analytics   - Run Advanced Post Analytics tests');
       console.log('  node run-tests.js download    - Run Download Tracking tests');
+      console.log('  node run-tests.js language    - Run Language Detection tests');
       break;
       
     case 'help':
@@ -73,6 +79,7 @@ try {
       console.log('  config    - Run ConfigManager tests only');
       console.log('  analytics - Run Advanced Post Analytics tests only');
       console.log('  download  - Run Download Tracking tests only');
+      console.log('  language  - Run Language Detection tests only');
       console.log('  install   - Install test dependencies');
       console.log('  help      - Show this help message');
       break;
