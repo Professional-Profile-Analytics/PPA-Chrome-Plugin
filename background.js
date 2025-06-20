@@ -1584,23 +1584,88 @@ async function executeCompanyPageSteps(tabId, companyId, email) {
 
         // Wait a bit for the page to fully render
         setTimeout(() => {
-          // Inject script to find and click first export button
+          // First, check if user has access to company analytics
           chrome.scripting.executeScript({
             target: { tabId },
-            function: findAndClickCompanyExportButton
-          }, (results) => {
-            if (results && results[0] && results[0].result) {
-              PersistentLogger.log('First company export button clicked successfully');
-
-              // Wait for popup/modal to appear and then handle the second export button
-              setTimeout(() => {
-                handleExportPopup(tabId);
-              }, 3000); // Increased wait time to 3 seconds for popup to appear
-
-            } else {
-              chrome.downloads.onCreated.removeListener(downloadListener);
-              reject(new Error('Failed to find or click first company export button'));
+            function: () => {
+              // Check for common error messages or access issues
+              const pageText = document.body.textContent.toLowerCase();
+              const hasAccessError = pageText.includes('access denied') || 
+                                   pageText.includes('not authorized') || 
+                                   pageText.includes('permission') ||
+                                   pageText.includes('admin access required');
+              
+              const hasAnalyticsContent = pageText.includes('analytics') || 
+                                        pageText.includes('insights') ||
+                                        pageText.includes('performance');
+              
+              return {
+                hasAccessError,
+                hasAnalyticsContent,
+                currentUrl: window.location.href,
+                pageTitle: document.title
+              };
             }
+          }, (accessResults) => {
+            if (accessResults && accessResults[0] && accessResults[0].result) {
+              const access = accessResults[0].result;
+              
+              if (access.hasAccessError) {
+                chrome.downloads.onCreated.removeListener(downloadListener);
+                reject(new Error(`Company analytics access denied. User may not have admin permissions for company ${companyId}. Page: ${access.currentUrl}`));
+                return;
+              }
+              
+              if (!access.hasAnalyticsContent) {
+                PersistentLogger.log(`⚠️ Warning: Page may not have loaded analytics content yet. URL: ${access.currentUrl}, Title: ${access.pageTitle}`);
+              }
+            }
+            
+            // Proceed with export button search
+            chrome.scripting.executeScript({
+              target: { tabId },
+              function: findAndClickCompanyExportButton
+            }, (results) => {
+              if (results && results[0] && results[0].result) {
+                PersistentLogger.log('First company export button clicked successfully');
+
+                // Wait for popup/modal to appear and then handle the second export button
+                setTimeout(() => {
+                  handleExportPopup(tabId);
+                }, 3000); // Increased wait time to 3 seconds for popup to appear
+
+              } else {
+                chrome.downloads.onCreated.removeListener(downloadListener);
+                
+                // Get more detailed error information
+                chrome.scripting.executeScript({
+                  target: { tabId },
+                  function: () => {
+                    return {
+                      url: window.location.href,
+                      title: document.title,
+                      buttonCount: document.querySelectorAll('button, [role="button"], .artdeco-button, a').length,
+                      hasExportText: document.body.textContent.toLowerCase().includes('export'),
+                      pageContent: document.body.textContent.substring(0, 500) // First 500 chars for debugging
+                    };
+                  }
+                }, (debugResults) => {
+                  let errorMessage = 'Failed to find or click first company export button';
+                  
+                  if (debugResults && debugResults[0] && debugResults[0].result) {
+                    const debug = debugResults[0].result;
+                    errorMessage += `\nPage URL: ${debug.url}`;
+                    errorMessage += `\nPage Title: ${debug.title}`;
+                    errorMessage += `\nClickable elements found: ${debug.buttonCount}`;
+                    errorMessage += `\nPage contains 'export' text: ${debug.hasExportText}`;
+                    errorMessage += `\nPage content preview: ${debug.pageContent.substring(0, 200)}...`;
+                  }
+                  
+                  PersistentLogger.log(`🔍 Company page debug info: ${errorMessage}`);
+                  reject(new Error(errorMessage));
+                });
+              }
+            });
           });
         }, 3000);
       }
@@ -1832,6 +1897,8 @@ async function checkForRecentDownloads(companyId, email) {
  * Function to be injected into the company analytics page to find and click export button
  */
 function findAndClickCompanyExportButton() {
+  console.log('🔍 Starting search for company export button...');
+  
   // Multi-language export button selectors
   const exportTexts = [
     'Export',      // English
@@ -1840,29 +1907,97 @@ function findAndClickCompanyExportButton() {
     'Exporter'     // French
   ];
 
-  // Try different selectors
+  // Try different selectors with more comprehensive approach
   const selectors = [
     'button',
     '[role="button"]',
     '.artdeco-button',
-    'a'
+    '.artdeco-button--primary',
+    '.artdeco-button--secondary',
+    'a[role="button"]',
+    'a',
+    'span[role="button"]',
+    '[data-control-name*="export"]',
+    '[aria-label*="export"]',
+    '[aria-label*="Export"]'
   ];
 
+  // First, log all available buttons for debugging
+  const allButtons = document.querySelectorAll('button, [role="button"], .artdeco-button, a');
+  console.log(`📊 Found ${allButtons.length} total clickable elements on page`);
+  
+  // Log first 10 button texts for debugging
+  const buttonTexts = [];
+  for (let i = 0; i < Math.min(allButtons.length, 10); i++) {
+    const text = allButtons[i].textContent?.trim();
+    const ariaLabel = allButtons[i].getAttribute('aria-label');
+    if (text || ariaLabel) {
+      buttonTexts.push(`"${text || ariaLabel}"`);
+    }
+  }
+  console.log(`🔤 Sample button texts: ${buttonTexts.join(', ')}`);
+
+  // Try each selector type
   for (const selector of selectors) {
+    console.log(`🔍 Trying selector: ${selector}`);
     const elements = document.querySelectorAll(selector);
+    console.log(`   Found ${elements.length} elements with selector ${selector}`);
+    
     for (const element of elements) {
+      // Check if element is visible
+      if (element.offsetParent === null) continue;
+      
       const text = element.textContent?.trim();
-      if (text && exportTexts.some(exportText =>
-        text.toLowerCase().includes(exportText.toLowerCase())
-      )) {
-        console.log(`Found company export button with text: ${text}`);
-        element.click();
-        return true;
+      const ariaLabel = element.getAttribute('aria-label');
+      const title = element.getAttribute('title');
+      const dataControlName = element.getAttribute('data-control-name');
+      
+      // Check all possible text sources
+      const textSources = [text, ariaLabel, title, dataControlName].filter(Boolean);
+      
+      for (const textSource of textSources) {
+        if (exportTexts.some(exportText =>
+          textSource.toLowerCase().includes(exportText.toLowerCase())
+        )) {
+          console.log(`✅ Found company export button with text: "${textSource}" (from ${text ? 'textContent' : ariaLabel ? 'aria-label' : title ? 'title' : 'data-control-name'})`);
+          console.log(`🖱️ Clicking element:`, element);
+          element.click();
+          return true;
+        }
       }
     }
   }
 
-  console.log('Company export button not found');
+  // If no exact match found, try broader search
+  console.log('🔍 No exact match found, trying broader search...');
+  
+  // Look for any button that might be related to downloading/exporting
+  const broadSearchTerms = [
+    'download', 'save', 'get', 'csv', 'excel', 'xlsx', 'data',
+    'herunterladen', 'speichern', 'daten', // German
+    'descargar', 'guardar', 'datos', // Spanish
+    'télécharger', 'enregistrer', 'données' // French
+  ];
+  
+  for (const element of allButtons) {
+    if (element.offsetParent === null) continue;
+    
+    const text = element.textContent?.trim().toLowerCase();
+    const ariaLabel = element.getAttribute('aria-label')?.toLowerCase();
+    const title = element.getAttribute('title')?.toLowerCase();
+    
+    const allText = [text, ariaLabel, title].filter(Boolean).join(' ');
+    
+    if (broadSearchTerms.some(term => allText.includes(term))) {
+      console.log(`🎯 Found potential export button with broader search: "${element.textContent?.trim() || ariaLabel || title}"`);
+      console.log(`🖱️ Clicking potential element:`, element);
+      element.click();
+      return true;
+    }
+  }
+
+  console.log('❌ Company export button not found after comprehensive search');
+  console.log(`📋 Total elements checked: ${allButtons.length}`);
   return false;
 }
 
