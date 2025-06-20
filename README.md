@@ -2,6 +2,38 @@
 
 A Chrome extension that automates the download and upload of LinkedIn analytics data to the Professional Profile Analytics service, and provides integration with Shiny web applications for LinkedIn post creation.
 
+## 🧪 Test Coverage Overview
+
+This extension has comprehensive test coverage with **154 automated tests** across 5 test suites:
+
+### **📊 Test Suite Summary**
+| Test Suite | Tests | Coverage |
+|------------|-------|----------|
+| **ConfigManager** | 24 | Configuration management, storage operations |
+| **Advanced Post Analytics** | 20 | Posts limit slider, URL processing, success messages |
+| **Download Tracking** | 25 | WebRequest API, LinkedIn URL capture, promise management |
+| **Language Detection** | 43 | Multi-language support (EN/DE/ES/FR), UI element detection |
+| **File Upload Integration** | 42 | API endpoints, base64 encoding, error handling |
+| **Total** | **154** | **Complete feature coverage** |
+
+### **🚀 Running Tests**
+```bash
+cd tests
+npm test                    # Run all 154 tests
+node run-tests.js config    # ConfigManager tests only
+node run-tests.js analytics # Advanced Analytics tests only
+node run-tests.js download  # Download Tracking tests only
+node run-tests.js language  # Language Detection tests only
+node run-tests.js upload    # File Upload tests only
+```
+
+### **✅ Quality Assurance**
+- **Automated CI/CD** - GitHub Actions run all tests on every push
+- **100% Feature Coverage** - All major functionality tested
+- **Error Handling** - Comprehensive edge case and error scenario testing
+- **Performance Testing** - Memory management and efficiency validation
+- **Cross-Language Testing** - Multi-language LinkedIn interface support
+
 ## Features
 
 - Automatically downloads LinkedIn analytics data
