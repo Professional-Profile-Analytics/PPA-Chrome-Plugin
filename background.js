@@ -337,15 +337,15 @@ const MultilingualTabInteractions = {
           for (const text of texts) {
             const link = links.find((a) => a.textContent.includes(text));
             if (link) {
-              Logger.log(`Found link with text: ${text}`);
+              console.log(`Found link with text: ${text}`);
               link.scrollIntoView({ behavior: "smooth", block: "center" });
               setTimeout(() => {
                 try {
-                  Logger.log(`Clicking link with text: ${text}`);
+                  console.log(`Clicking link with text: ${text}`);
                   link.click();
                   linkFound = true;
                 } catch (e) {
-                  Logger.error(`Error clicking link: ${e.message}`);
+                  console.error(`Error clicking link: ${e.message}`);
                 }
               }, 500);
               linkFound = true;
@@ -1855,14 +1855,14 @@ function findAndClickCompanyExportButton() {
       if (text && exportTexts.some(exportText =>
         text.toLowerCase().includes(exportText.toLowerCase())
       )) {
-        PersistentLogger.log(`Found company export button with text: ${text}`);
+        console.log(`Found company export button with text: ${text}`);
         element.click();
         return true;
       }
     }
   }
 
-  PersistentLogger.log('Company export button not found');
+  console.log('Company export button not found');
   return false;
 }
 
@@ -1870,7 +1870,7 @@ function findAndClickCompanyExportButton() {
  * Function to be injected to find and click the second export button in popup/modal
  */
 function findAndClickSecondExportButton() {
-  PersistentLogger.log('Looking for second export button in popup/modal...');
+  console.log('Looking for second export button in popup/modal...');
 
   // Multi-language export button texts
   const exportTexts = [
@@ -1896,7 +1896,7 @@ function findAndClickSecondExportButton() {
     const modals = document.querySelectorAll(modalSelector);
     for (const modal of modals) {
       if (modal.offsetParent !== null) { // Check if modal is visible
-        PersistentLogger.log(`Found visible modal: ${modalSelector}`);
+        console.log(`Found visible modal: ${modalSelector}`);
 
         const buttons = modal.querySelectorAll('button, [role="button"], .artdeco-button, a');
         for (const button of buttons) {
@@ -1904,7 +1904,7 @@ function findAndClickSecondExportButton() {
           if (text && exportTexts.some(exportText =>
             text.toLowerCase().includes(exportText.toLowerCase())
           )) {
-            PersistentLogger.log(`Found second export button in modal with text: ${text}`);
+            console.log(`Found second export button in modal with text: ${text}`);
             button.click();
             return true;
           }
@@ -1924,7 +1924,7 @@ function findAndClickSecondExportButton() {
         // Make sure this is not the same button we clicked before
         const rect = button.getBoundingClientRect();
         if (rect.width > 0 && rect.height > 0) {
-          PersistentLogger.log(`Found visible second export button with text: ${text}`);
+          console.log(`Found visible second export button with text: ${text}`);
           button.click();
           return true;
         }
@@ -1932,7 +1932,7 @@ function findAndClickSecondExportButton() {
     }
   }
 
-  PersistentLogger.log('Second export button not found in popup/modal');
+  console.log('Second export button not found in popup/modal');
   return false;
 }
 
@@ -1940,7 +1940,7 @@ function findAndClickSecondExportButton() {
  * Function to be injected to find alternative export buttons or download options
  */
 function findAndClickAlternativeExportButton() {
-  PersistentLogger.log('Looking for alternative export/download buttons...');
+  console.log('Looking for alternative export/download buttons...');
 
   // Alternative texts that might appear
   const alternativeTexts = [
@@ -1971,7 +1971,7 @@ function findAndClickAlternativeExportButton() {
       if (alternativeTexts.some(altText =>
         textToCheck.includes(altText.toLowerCase())
       )) {
-        PersistentLogger.log(`Found alternative export button with text: ${text || ariaLabel || title}`);
+        console.log(`Found alternative export button with text: ${text || ariaLabel || title}`);
         element.click();
         return true;
       }
@@ -1982,13 +1982,13 @@ function findAndClickAlternativeExportButton() {
   const downloadLinks = document.querySelectorAll('a[download], a[href*="download"], a[href*="export"]');
   for (const link of downloadLinks) {
     if (link.offsetParent !== null) {
-      PersistentLogger.log(`Found download link: ${link.href}`);
+      console.log(`Found download link: ${link.href}`);
       link.click();
       return true;
     }
   }
 
-  PersistentLogger.log('No alternative export buttons found');
+  console.log('No alternative export buttons found');
   return false;
 }
 
