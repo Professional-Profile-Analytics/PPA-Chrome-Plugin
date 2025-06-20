@@ -1,8 +1,6 @@
-name: Build Chrome Extension Release
+name: Build Chrome Extension
 
 on:
-  release:
-    types: [created, published]
   push:
     tags:
       - 'v*'
@@ -235,32 +233,6 @@ jobs:
         name: ppa-chrome-extension-${{ steps.get_version.outputs.VERSION }}
         path: ${{ env.ZIP_NAME }}
         retention-days: 90
-        
-    - name: Upload to release (if release event)
-      if: github.event_name == 'release'
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ${{ env.ZIP_NAME }}
-        asset_name: ${{ env.ZIP_NAME }}
-        asset_content_type: application/zip
-        
-    - name: Update release description (if release event)
-      if: github.event_name == 'release'
-      uses: actions/github-script@v7
-      with:
-        script: |
-          const fs = require('fs');
-          const releaseNotes = fs.readFileSync('release-notes.md', 'utf8');
-          
-          await github.rest.repos.updateRelease({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            release_id: ${{ github.event.release.id }},
-            body: releaseNotes
-          });
           
     - name: Create summary
       run: |
@@ -281,7 +253,3 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### 📥 Download" >> $GITHUB_STEP_SUMMARY
         echo "The extension package is available as an artifact in this workflow run." >> $GITHUB_STEP_SUMMARY
-        
-        if [ "${{ github.event_name }}" == "release" ]; then
-          echo "It has also been automatically attached to the GitHub release." >> $GITHUB_STEP_SUMMARY
-        fi
