@@ -54,23 +54,21 @@ jobs:
         cd chrome-extension-package
         
         # Create a clear identification file
-        cat > CHROME_EXTENSION_INFO.txt << 'INFOEOF'
-        This is a Chrome Extension package for Professional Profile Analytics (PPA).
-        
-        PACKAGE TYPE: Chrome Extension (Manifest V3)
-        PURPOSE: LinkedIn analytics automation
-        SOURCE: Open source project
-        BUILD: Automated GitHub Actions build
-        
-        Files in this package:
-        - manifest.json: Chrome Extension configuration
-        - background.js: Service worker script
-        - popup.html/css/js: Extension popup interface  
-        - options.html/css/js: Extension settings page
-        - icons/: Extension icon files
-        
-        This is NOT an executable program - it's a Chrome Extension that runs in the browser.
-        INFOEOF
+        echo "This is a Chrome Extension package for Professional Profile Analytics (PPA)." > CHROME_EXTENSION_INFO.txt
+        echo "" >> CHROME_EXTENSION_INFO.txt
+        echo "PACKAGE TYPE: Chrome Extension (Manifest V3)" >> CHROME_EXTENSION_INFO.txt
+        echo "PURPOSE: LinkedIn analytics automation" >> CHROME_EXTENSION_INFO.txt
+        echo "SOURCE: Open source project" >> CHROME_EXTENSION_INFO.txt
+        echo "BUILD: Automated GitHub Actions build" >> CHROME_EXTENSION_INFO.txt
+        echo "" >> CHROME_EXTENSION_INFO.txt
+        echo "Files in this package:" >> CHROME_EXTENSION_INFO.txt
+        echo "- manifest.json: Chrome Extension configuration" >> CHROME_EXTENSION_INFO.txt
+        echo "- background.js: Service worker script" >> CHROME_EXTENSION_INFO.txt
+        echo "- popup.html/css/js: Extension popup interface" >> CHROME_EXTENSION_INFO.txt
+        echo "- options.html/css/js: Extension settings page" >> CHROME_EXTENSION_INFO.txt
+        echo "- icons/: Extension icon files" >> CHROME_EXTENSION_INFO.txt
+        echo "" >> CHROME_EXTENSION_INFO.txt
+        echo "This is NOT an executable program - it's a Chrome Extension that runs in the browser." >> CHROME_EXTENSION_INFO.txt
         
         cd ..
         echo "Files copied to package directory:"
@@ -146,27 +144,25 @@ jobs:
           echo "🛡️ Adding virus scanning mitigation..."
           
           # Create a README.txt file to help with virus scanner context
-          cat > README.txt << 'READMEEOF'
-          PPA Chrome Extension Package
-          ============================
-          
-          This is a legitimate Chrome Extension package for Professional Profile Analytics.
-          
-          Package Contents:
-          - manifest.json: Chrome Extension manifest file
-          - background.js: Extension service worker
-          - popup.html/css/js: Extension popup interface
-          - options.html/css/js: Extension options page
-          - icons/: Extension icons
-          
-          Installation:
-          1. Extract this ZIP file
-          2. Open Chrome -> Extensions (chrome://extensions/)
-          3. Enable Developer Mode
-          4. Click "Load unpacked" and select the extracted folder
-          
-          This package is automatically built by GitHub Actions.
-          READMEEOF
+          echo "PPA Chrome Extension Package" > README.txt
+          echo "============================" >> README.txt
+          echo "" >> README.txt
+          echo "This is a legitimate Chrome Extension package for Professional Profile Analytics." >> README.txt
+          echo "" >> README.txt
+          echo "Package Contents:" >> README.txt
+          echo "- manifest.json: Chrome Extension manifest file" >> README.txt
+          echo "- background.js: Extension service worker" >> README.txt
+          echo "- popup.html/css/js: Extension popup interface" >> README.txt
+          echo "- options.html/css/js: Extension options page" >> README.txt
+          echo "- icons/: Extension icons" >> README.txt
+          echo "" >> README.txt
+          echo "Installation:" >> README.txt
+          echo "1. Extract this ZIP file" >> README.txt
+          echo "2. Open Chrome -> Extensions (chrome://extensions/)" >> README.txt
+          echo "3. Enable Developer Mode" >> README.txt
+          echo "4. Click \"Load unpacked\" and select the extracted folder" >> README.txt
+          echo "" >> README.txt
+          echo "This package is automatically built by GitHub Actions." >> README.txt
           
           # Re-create ZIP with README for better virus scanner recognition
           zip -u "$ZIP_NAME" README.txt
