@@ -66,6 +66,16 @@ try {
       execSync('npx jest retryMechanism.test.js --verbose', { stdio: 'inherit' });
       break;
       
+    case 'options':
+      console.log('Running Options Page tests only...\n');
+      execSync('npx jest optionsPage.test.js --verbose', { stdio: 'inherit' });
+      break;
+      
+    case 'popup':
+      console.log('Running Popup Interface tests only...\n');
+      execSync('npx jest popupInterface.test.js --verbose', { stdio: 'inherit' });
+      break;
+      
     case 'chrome':
       console.log('Running Chrome API Integration tests only...\n');
       execSync('npx jest chromeApi.test.js --verbose', { stdio: 'inherit' });
@@ -100,6 +110,8 @@ try {
       console.log('  node run-tests.js language    - Run Language Detection tests');
       console.log('  node run-tests.js upload      - Run File Upload Integration tests');
       console.log('  node run-tests.js retry       - Run Retry Mechanism tests');
+      console.log('  node run-tests.js options     - Run Options Page tests');
+      console.log('  node run-tests.js popup       - Run Popup Interface tests');
       console.log('  node run-tests.js chrome      - Run Chrome API Integration tests');
       console.log('  node run-tests.js e2e         - Run End-to-End Workflow tests');
       console.log('  node run-tests.js ui          - Run UI Integration tests');
@@ -118,6 +130,8 @@ try {
       console.log('  language  - Run Language Detection tests only');
       console.log('  upload    - Run File Upload Integration tests only');
       console.log('  retry     - Run Retry Mechanism tests only');
+      console.log('  options   - Run Options Page tests only');
+      console.log('  popup     - Run Popup Interface tests only');
       console.log('  chrome    - Run Chrome API Integration tests only');
       console.log('  e2e       - Run End-to-End Workflow tests only');
       console.log('  ui        - Run UI Integration tests only');

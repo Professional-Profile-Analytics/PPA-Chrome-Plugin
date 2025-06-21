@@ -17,21 +17,28 @@
     "test:security": "jest --testPathPattern=security"
   },
   "devDependencies": {
+    "@types/chrome": "^0.0.246",
     "jest": "^27.5.1",
     "jest-chrome": "^0.8.0",
-    "@types/chrome": "^0.0.246",
-    "sinon": "^15.2.0",
-    "jest-environment-jsdom": "^27.5.1"
+    "jest-environment-jsdom": "^27.5.1",
+    "jsdom": "^26.1.0",
+    "sinon": "^15.2.0"
   },
   "jest": {
     "testEnvironment": "jsdom",
-    "setupFilesAfterEnv": ["<rootDir>/setup/jest.setup.js"],
+    "setupFilesAfterEnv": [
+      "<rootDir>/setup/jest.setup.js"
+    ],
     "collectCoverageFrom": [
       "../*.js",
       "!../node_modules/**",
       "!**/coverage/**"
     ],
     "coverageDirectory": "./coverage",
-    "coverageReporters": ["text", "lcov", "html"]
+    "coverageReporters": [
+      "text",
+      "lcov",
+      "html"
+    ]
   }
 }
