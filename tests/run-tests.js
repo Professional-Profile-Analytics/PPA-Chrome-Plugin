@@ -61,6 +61,11 @@ try {
       execSync('npx jest fileUpload.test.js --verbose', { stdio: 'inherit' });
       break;
       
+    case 'retry':
+      console.log('Running Retry Mechanism tests only...\n');
+      execSync('npx jest retryMechanism.test.js --verbose', { stdio: 'inherit' });
+      break;
+      
     case 'chrome':
       console.log('Running Chrome API Integration tests only...\n');
       execSync('npx jest chromeApi.test.js --verbose', { stdio: 'inherit' });
@@ -94,6 +99,7 @@ try {
       console.log('  node run-tests.js download    - Run Download Tracking tests');
       console.log('  node run-tests.js language    - Run Language Detection tests');
       console.log('  node run-tests.js upload      - Run File Upload Integration tests');
+      console.log('  node run-tests.js retry       - Run Retry Mechanism tests');
       console.log('  node run-tests.js chrome      - Run Chrome API Integration tests');
       console.log('  node run-tests.js e2e         - Run End-to-End Workflow tests');
       console.log('  node run-tests.js ui          - Run UI Integration tests');
@@ -111,6 +117,7 @@ try {
       console.log('  download  - Run Download Tracking tests only');
       console.log('  language  - Run Language Detection tests only');
       console.log('  upload    - Run File Upload Integration tests only');
+      console.log('  retry     - Run Retry Mechanism tests only');
       console.log('  chrome    - Run Chrome API Integration tests only');
       console.log('  e2e       - Run End-to-End Workflow tests only');
       console.log('  ui        - Run UI Integration tests only');
