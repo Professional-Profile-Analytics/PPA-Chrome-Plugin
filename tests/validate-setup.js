@@ -36,6 +36,36 @@ if (fs.existsSync(backgroundPath)) {
   allFilesExist = false;
 }
 
+// Additional scenario: Check if contentScript.test.js exists
+const contentScriptTestPath = path.join(__dirname, 'contentScript.test.js');
+if (fs.existsSync(contentScriptTestPath)) {
+  console.log('✅ contentScript.test.js - Found');
+} else {
+  console.log('❌ contentScript.test.js - Missing (recommended for content script testing)');
+  allFilesExist = false;
+}
+
+// Additional scenario: Check if tests directory contains at least 5 test files
+const testFiles = fs.readdirSync(__dirname).filter(f => f.endsWith('.test.js'));
+if (testFiles.length >= 5) {
+  console.log(`✅ ${testFiles.length} test files found in tests directory`);
+} else {
+  console.log(`❌ Only ${testFiles.length} test files found in tests directory (expected at least 5)`);
+  allFilesExist = false;
+}
+
+// Additional scenario: Check if jest.setup.js contains basic setup (e.g., 'jest' in file)
+try {
+  const jestSetupContent = fs.readFileSync(path.join(__dirname, 'setup', 'jest.setup.js'), 'utf8');
+  if (/jest/i.test(jestSetupContent)) {
+    console.log('✅ jest.setup.js contains Jest setup');
+  } else {
+    console.log('❌ jest.setup.js does not appear to contain Jest setup');
+  }
+} catch (e) {
+  console.log('❌ Could not read jest.setup.js:', e.message);
+}
+
 console.log('\n' + '='.repeat(50));
 
 if (allFilesExist) {

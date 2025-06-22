@@ -74,6 +74,11 @@ const chrome = {
 // Make chrome available globally
 global.chrome = chrome;
 
+// Polyfill for TextEncoder/TextDecoder for jsdom compatibility
+const { TextEncoder, TextDecoder } = require('util');
+global.TextEncoder = TextEncoder;
+global.TextDecoder = TextDecoder;
+
 // Global test setup
 beforeEach(() => {
   // Clear all mocks before each test
